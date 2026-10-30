@@ -1,6 +1,12 @@
 # Code Visualizer — Product Requirements Document
 
-Status: proposed; no application implemented. Version 0.4, October 30, 2026.
+Status: early alpha implemented locally; full roadmap remains proposed. Version 0.5, October 30, 2026.
+
+## Implementation snapshot
+
+The first alpha includes a native-module browser workspace, three original guided exercises, staged hints, algorithm revisions, guided edge-case inputs and reference validators, manual call-stack/array snapshots, recall and fixed review scheduling, CSV mapping, JSON transfer, and a buildable Chrome capture/side-panel extension. See [development notes](DEVELOPMENT.md) for verification and limitations.
+
+The implementation uses dependency-free JavaScript instead of the provisional React/TypeScript stack. Local browser storage is implemented; no hosted service or account is required. Live code tracing, automatic free-form pseudocode evaluation, arbitrary-question tutoring, adaptive scheduling, and Notion API sync remain planned. Extension API tests use mocks; an additional native Chrome run passed 17 installed-extension assertions against live LeetCode pages, recorded in [browser results](browser-testing/2026-10-30.json). Requirements below remain the product targets, not a claim that every acceptance criterion has shipped.
 
 ## 1. Product outcome
 
@@ -194,5 +200,5 @@ No implementation schedule is committed. The first release must be useful with n
 
 - Confirm the learner's primary coding language and adjust the execution spike accordingly.
 - Inspect a deliberately shared tracker export to settle field mapping; do not publish personal tracker contents.
-- Confirm the public GitHub repository destination; current CLI authentication must be repaired or another publishing route used.
+- Repository destination is confirmed as `subharthi99/code-visualizer`; pushing implementation changes may require the owner’s terminal if this agent session remains restricted.
 - Choose hosting and pin runtime/dependency versions after the spike, not during market research.

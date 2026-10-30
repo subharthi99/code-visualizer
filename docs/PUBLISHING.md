@@ -1,32 +1,25 @@
-# Publishing to GitHub
+# Repository and distribution
 
-Public repository created: [subharthi99/code-visualizer](https://github.com/subharthi99/code-visualizer).
+Public repository: [subharthi99/code-visualizer](https://github.com/subharthi99/code-visualizer).
 
-**Status: repository created; file publication is pending.** No remote commit or local Git checkout has been created by this session.
+The initial planning documents were pushed by the repository owner. Implementation changes are prepared locally; check Git status before committing or pushing. The current agent environment may restrict network connections and writes to `.git` even when the owner's terminal works normally.
 
-## Current blockers
-
-- The connected GitHub integration can read repository metadata, but file creation returned `403 Resource not accessible by integration`.
-- Browser creation succeeded; further Firefox automation was subsequently denied before any files were uploaded.
-- The local GitHub CLI could not connect to the API, and its authentication check reported an invalid credential.
-- The original workspace denies creation of `.git`.
-
-Grant the GitHub integration write access to this repository to resume connector publication, or publish from a terminal with network access and repository-metadata write access. No additional remote repository needs to be created.
-
-## Publish from a terminal
-
-Run from the project directory after reviewing the files:
+## Validate and publish source
 
 ```sh
-gh auth status
-# If authentication fails:
-gh auth login -h github.com
-git init -b main
-git add AGENTS.md README.md CONTRIBUTING.md LICENSE .gitignore docs .github
-git diff --cached
-git commit -m "Add market study and product requirements"
-git remote add origin https://github.com/subharthi99/code-visualizer.git
-git push -u origin main
+npm run check
+npm test
+npm run build
+git status --short
+git diff
+# Stage only reviewed source, tests, documentation, and configuration.
+git add README.md CONTRIBUTING.md package.json package-lock.json .editorconfig index.html src assets extension scripts tests docs
+git commit -m "Implement pre-code learning workspace and LeetCode companion"
+git push origin main
 ```
 
-Inspect existing Git metadata and remote history before running initialization or pushing if the repository has changed since this session. Do not force-push. Keep personal tracker exports, credentials, and restricted third-party content out of commits. The application and extension remain in planning.
+Do not commit generated `dist/` files, browser data, personal tracker exports, or credentials. Inspect remote history before pushing; never force-push to resolve an unexpected divergence.
+
+## Distribute the alpha
+
+`npm run build` produces `dist/web` for static HTTP hosting and `dist/extension` for Chrome's unpacked-extension workflow. No hosted deployment or browser-store publication is configured. Follow the [manual validation checklist](DEVELOPMENT.md) before sharing a release. The app is an early alpha, not an executed-code debugger.

@@ -1,0 +1,193 @@
+{
+  "date": "2026-10-30",
+  "runner": "cua_repl controlling native Google Chrome",
+  "build": "dist/web/standalone.html",
+  "storage": "real browser IndexedDB",
+  "assertions": [
+    {
+      "scenario": "custom problem + note persistence + generic hint",
+      "result": "pass"
+    },
+    {
+      "scenario": "algorithm edit saved as revision",
+      "result": "pass"
+    },
+    {
+      "scenario": "edge-case category changes preserve form draft",
+      "result": "pass"
+    },
+    {
+      "scenario": "equivalent JSON edge inputs are deduplicated",
+      "result": "pass"
+    },
+    {
+      "scenario": "record suspended caller + active child",
+      "result": "pass"
+    },
+    {
+      "scenario": "record return and resume caller",
+      "result": "pass"
+    },
+    {
+      "scenario": "snapshot replay restores prior call state",
+      "result": "pass"
+    },
+    {
+      "scenario": "snapshot replay restores return state",
+      "result": "pass"
+    },
+    {
+      "scenario": "recall reveal preserves written reconstruction",
+      "result": "pass"
+    },
+    {
+      "scenario": "review rating persisted",
+      "result": "pass"
+    },
+    {
+      "scenario": "real IndexedDB persists notes after reload",
+      "result": "pass"
+    },
+    {
+      "scenario": "JSON import preview",
+      "result": "pass"
+    },
+    {
+      "scenario": "JSON import commits new record",
+      "result": "pass"
+    },
+    {
+      "scenario": "malformed backup is rejected without writes",
+      "result": "pass"
+    },
+    {
+      "scenario": "CSV mapping previews duplicates and invalid rows",
+      "result": "pass"
+    },
+    {
+      "scenario": "CSV import succeeds",
+      "result": "pass"
+    },
+    {
+      "scenario": "repeat CSV import preserves existing records",
+      "result": "pass"
+    },
+    {
+      "scenario": "second tab commits a newer record",
+      "result": "pass"
+    },
+    {
+      "scenario": "stale browser-tab edit is rejected",
+      "result": "pass"
+    },
+    {
+      "scenario": "newer tab data survives a rejected stale write",
+      "result": "pass"
+    }
+  ],
+  "extension": {
+    "status": "passed live installed-extension validation",
+    "version": "0.1.0",
+    "installed": true,
+    "liveLeetCodeTested": true,
+    "pages": [
+      "https://leetcode.com/problems/two-sum/description/",
+      "https://leetcode.com/problems/two-sum/solutions/?envType=study-plan",
+      "https://leetcode.com/problems/valid-parentheses/description/",
+      "https://leetcode.com/problems/subsets/description/",
+      "https://example.com/"
+    ],
+    "assertions": [
+      {
+        "scenario": "unpacked extension installs and enables",
+        "result": "pass"
+      },
+      {
+        "scenario": "live Two Sum capture opens side panel",
+        "result": "pass"
+      },
+      {
+        "scenario": "panel reopen preserves question notes and algorithm revision",
+        "result": "pass"
+      },
+      {
+        "scenario": "solutions subpage reuses canonical question record",
+        "result": "pass"
+      },
+      {
+        "scenario": "same-tab question navigation does not silently rebind notes",
+        "result": "pass"
+      },
+      {
+        "scenario": "explicit recapture switches to the new question",
+        "result": "pass"
+      },
+      {
+        "scenario": "second LeetCode tab has an independent captured context",
+        "result": "pass"
+      },
+      {
+        "scenario": "first LeetCode tab retains its own note",
+        "result": "pass"
+      },
+      {
+        "scenario": "second LeetCode tab retains its own note",
+        "result": "pass"
+      },
+      {
+        "scenario": "extension notebook survives live page reload",
+        "result": "pass"
+      },
+      {
+        "scenario": "side-panel tabs support arrow-key navigation",
+        "result": "pass"
+      },
+      {
+        "scenario": "side-panel tabs support End navigation",
+        "result": "pass"
+      },
+      {
+        "scenario": "installed extension accepts a browser-notebook JSON transfer",
+        "result": "pass"
+      },
+      {
+        "scenario": "extension import preserves captured questions",
+        "result": "pass"
+      },
+      {
+        "scenario": "unsupported live page gives manual-entry guidance",
+        "result": "pass"
+      },
+      {
+        "scenario": "Chrome extension manager reports no runtime errors",
+        "result": "pass"
+      },
+      {
+        "scenario": "installed-extension reload retains the original notebook",
+        "result": "pass"
+      }
+    ]
+  },
+  "limits": [
+    "HTTP preview binding denied with EPERM; standalone build tested instead.",
+    "Validated on Chrome 156.0.8078.48 on macOS arm64, not every supported browser version.",
+    "Screen-reader conformance, whole-browser restart, permission-denial injection, and forced panel-fallback behavior are not established by this run. Failure-injection coverage remains in the Node suite.",
+    "CUA-driven assertions were executed in the connected native browser; npm test runs the Node suite, not this UI session."
+  ],
+  "notes": [
+    "Tests used labeled QA records and isolated import fixtures; existing learner notes were preserved.",
+    "The first stale-write assertion expected an error prefix not rendered by the outer handler; corrected to assert the actual conflict message and verified newer data after reload. No implementation change was needed.",
+    "Installed with explicit user confirmation. QA notes were written only inside the extension; LeetCode code editors and submissions were not modified. The extension remains installed for the user."
+  ],
+  "browser": {
+    "name": "Google Chrome",
+    "version": "156.0.8078.48",
+    "platform": "macOS arm64"
+  },
+  "summary": {
+    "appBrowserAssertions": 20,
+    "liveExtensionAssertions": 17,
+    "totalPassed": 37,
+    "implementationChangesRequired": false
+  }
+}
