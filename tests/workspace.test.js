@@ -4,10 +4,14 @@ import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import * as domain from '../src/domain.js';
 import * as content from '../src/content.js';
+import * as contextModule from '../src/context.js';
+import * as lessonModule from '../src/lessons.js';
+import * as visualUI from '../src/visual-ui.js';
+import * as visualModule from '../src/visual.js';
 
 // Exercise the actual application handlers with DOM/storage boundaries replaced.
 // This verifies state and rendering decisions, not layout or real browser events.
-async function workspace(initial) {
+async function workspace(initial, options = {}) {
   const stored = new Map(initial.map(record => [record.id,structuredClone(record)]));
   const rootEvents = {}, documentEvents = {}, timers = new Map();
   const root = { innerHTML:'', querySelectorAll:() => [], addEventListener:(name,fn) => { rootEvents[name] = fn; } };
@@ -16,11 +20,11 @@ async function workspace(initial) {
   const modal = { innerHTML:'', addEventListener() {},showModal() {},close() {} };
   const focus = { focus() {} };
   const context = vm.createContext({
-    ...domain, ...content, console, URLSearchParams, URL, structuredClone,
+    ...domain, ...content, ...contextModule, ...lessonModule, ...visualModule, ...visualUI, console, URLSearchParams, URL, structuredClone, chrome:options.chrome,
     Date, JSON, Object, Map, Set, Number, String, Array, Promise,
     FormData:class { constructor(form) { this.entries = Object.entries(form.values); } [Symbol.iterator]() { return this.entries[Symbol.iterator](); } },
     setTimeout:fn => { const id = timers.size+1; timers.set(id,fn); return id; }, clearTimeout:id => timers.delete(id),
-    sessionStorage:{ getItem:() => initial[0]?.id || '',setItem() {} },
+    sessionStorage:{ getItem:key => key === 'cv-source-tab' ? String(options.sourceTabId ?? '') : initial[0]?.id || '',setItem() {} },
     location:{ hash:'',pathname:'/',search:'' }, history:{ replaceState() {} },
     window:{ addEventListener() {} },
     document:{
@@ -43,7 +47,7 @@ async function workspace(initial) {
   const click = (action,extra = {}) => documentEvents.click({ preventDefault() {},target:{ closest:() => ({ dataset:{ action,...extra } }) } });
   const input = (field,value) => rootEvents.input({ target:{ dataset:{ field },value } });
   const submit = (id,values) => documentEvents.submit({ preventDefault() {},target:{ id,values,dataset:{},reset() {} } });
-  return { root,stored,click,input,submit,controls,notice, flush:context.boundary.persist };
+  return { root,stored,click,input,submit,controls,notice,modal, flush:context.boundary.persist };
 }
 
 test('workspace reveals one authored hint while preserving notes across a problem switch', async () => {
@@ -127,4 +131,68 @@ test('case collection deduplicates equivalent JSON despite formatting and key or
     assert.equal(app.stored.get(record.id).cases.length,1);
     assert.match(app.notice.textContent,/already in your collection/);
   }
+});
+
+test('question context is previewed and only explicitly selected fields replace saved data', async () => {
+  const record = domain.makeRecord({ url:'https://leetcode.com/problems/two-sum/' });
+  record.constraints = 'Keep my constraint notes'; record.approach = 'Keep my reasoning';
+  const app = await workspace([record]);
+  await app.click('import-context');
+  assert.match(app.modal.innerHTML,/Review question context/);
+  assert.equal(app.stored.get(record.id).description,undefined);
+  await app.submit('context-form',{ url:record.url,title:'Two Sum',description:'Imported statement',examples:'Imported examples',constraints:'Replace me', 'use-description':'on','use-examples':'on' });
+  assert.equal(app.stored.get(record.id).description,'Imported statement');
+  assert.equal(app.stored.get(record.id).constraints,'Keep my constraint notes');
+  assert.equal(app.stored.get(record.id).approach,'Keep my reasoning');
+  assert.match(app.root.innerHTML,/Imported statement/);
+});
+
+test('linked questions show staged authored hints and attempt-specific checkpoints', async () => {
+  const record = domain.makeRecord({ url:'https://leetcode.com/problems/two-sum/' });
+  record.approach = 'Use a hash map, inserting before checking.';
+  const app = await workspace([record]);
+  assert.match(app.root.innerHTML,/Authored lesson for this question/);
+  assert.ok(!app.root.innerHTML.includes(content.exercises[2].hints[0]));
+  await app.click('hint');
+  assert.match(app.root.innerHTML,/Which indices are already in your map/);
+  assert.ok(app.root.innerHTML.includes(content.exercises[2].hints[0]));
+  assert.ok(!app.root.innerHTML.includes(content.exercises[2].hints[1]));
+  await app.click('hint-focus',{ focus:'implementation' });
+  assert.match(app.root.innerHTML,/Trace index 0/);
+});
+
+test('visual dry runs save editable diagrams and highlight changes when replayed', async () => {
+  const record = domain.makeRecord({ title:'Visual workspace' });
+  const app = await workspace([record]);
+  await app.click('tab',{ tab:'Dry run' });
+  assert.match(app.root.innerHTML,/Visual state editor/);
+  app.controls.set('#array-values',{ value:'[2,3]' });
+  await app.click('visual-set-array');
+  app.controls.set('#pointer-name',{ value:'left' }); app.controls.set('#pointer-index',{ value:'0' });
+  await app.click('visual-pointer');
+  await app.submit('snapshot-form',{ action:'Initial window',explanation:'Start at index 0',variables:'{"i":0}',input:'[2,3]',step:'1',diagram:'' });
+  app.controls.get('#pointer-index').value = '1';
+  await app.click('visual-pointer');
+  await app.submit('snapshot-form',{ action:'Move right',explanation:'Advance the boundary',variables:'{"i":1}',input:'[2,3]',step:'2',diagram:'' });
+  assert.equal(app.stored.get(record.id).snapshots[0].visual.pointers[0].index,0);
+  assert.equal(app.stored.get(record.id).snapshots[1].visual.pointers[0].index,1);
+  assert.match(app.root.innerHTML,/Pointer left/);
+  assert.match(app.root.innerHTML,/What changed/);
+  await app.click('prev-snapshot');
+  assert.match(app.root.innerHTML,/Initial window/);
+});
+
+test('a delayed context response cannot attach one question’s description to another question', async () => {
+  const first = domain.makeRecord({ url:'https://leetcode.com/problems/two-sum/' });
+  const second = domain.makeRecord({ url:'https://leetcode.com/problems/subsets/' });
+  let deliver, started;
+  const ready = new Promise(resolve => { started = resolve; });
+  const app = await workspace([first,second],{ sourceTabId:7,chrome:{ runtime:{ id:'test-extension',sendMessage:() => { started(); return new Promise(resolve => { deliver = resolve; }); } } } });
+  const importing = app.click('import-context');
+  await ready;
+  await app.click('select',{ id:second.id });
+  deliver({ ok:true,context:{ url:first.url,description:'First question statement' } });
+  await importing;
+  assert.equal(app.modal.innerHTML,'');
+  assert.match(app.notice.textContent,/switched|changed/i);
 });

@@ -1,0 +1,57 @@
+{
+  "release": "0.2.0",
+  "runner": "cua_repl driving native Google Chrome",
+  "build": "standalone app",
+  "assertions": [
+    {
+      "scenario": "linked question resolves to authored guidance",
+      "result": "pass"
+    },
+    {
+      "scenario": "context preview applies selected fields and preserves existing notes",
+      "result": "pass"
+    },
+    {
+      "scenario": "hint checkpoint reflects saved attempt",
+      "result": "pass"
+    },
+    {
+      "scenario": "array and named pointer persist in a visual snapshot",
+      "result": "pass"
+    },
+    {
+      "scenario": "pointer movement is highlighted between snapshots",
+      "result": "pass"
+    },
+    {
+      "scenario": "replay restores the prior array snapshot",
+      "result": "pass"
+    },
+    {
+      "scenario": "tree controls are exposed after accessibility fix",
+      "result": "pass"
+    },
+    {
+      "scenario": "tree edits preserve connected child links",
+      "result": "pass"
+    },
+    {
+      "scenario": "shared-object mutation retains both aliases and highlights the changed object",
+      "result": "pass"
+    },
+    {
+      "scenario": "shared-object replay restores historical values",
+      "result": "pass"
+    },
+    {
+      "scenario": "new visual snapshots persist after browser reload",
+      "result": "pass"
+    }
+  ],
+  "liveContextExtraction": "Pending approval to reload the extension with its new scripting permission",
+  "notes": [
+    "The initial URL-field locator was corrected to Chrome\u2019s url role. Diagram mode controls use the toggle button role. These were test-locator corrections.",
+    "A real SVG accessibility defect was reproduced, repaired test-first, and rechecked.",
+    "Existing learner data was preserved; tests used labeled QA records."
+  ]
+}

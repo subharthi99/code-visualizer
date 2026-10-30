@@ -1,3 +1,4 @@
+import { validateVisual } from './visual.js';
 import { exercises } from './content.js';
 
 export const SCHEMA_VERSION = 1;
@@ -50,7 +51,7 @@ export function addSnapshot(record, draft) {
   const frames = clone(draft.frames || []);
   validateFrames(frames);
   const next = clone(record);
-  next.snapshots.push({ id: uid(), revision: record.revision, at: new Date().toISOString(), step: text(draft.step, 100), action: text(draft.action, 500), input: text(draft.input), variables: clone(variables), frames, explanation: text(draft.explanation), diagram: text(draft.diagram) });
+  next.snapshots.push({ id: uid(), revision: record.revision, at: new Date().toISOString(), step: text(draft.step, 100), action: text(draft.action, 500), input: text(draft.input), variables: clone(variables), frames, explanation: text(draft.explanation), diagram: text(draft.diagram), ...(draft.visual !== undefined ? { visual:validateVisual(draft.visual) } : {}) });
   return next;
 }
 
@@ -89,6 +90,17 @@ export function returnFrame(frames, value) {
   frame.returned = text(value, 1000);
   const parent = next.find(f => f.id === frame.parentId);
   if (parent) parent.status = 'active';
+  return next;
+}
+
+export function updateActiveFrame(frames, locals) {
+  const next = clone(frames);
+  validateFrames(next);
+  const frame = next.findLast(item => item.status === 'active');
+  if (!frame) throw new Error('Enter a call before editing active locals.');
+  const parsed = JSON.parse(locals);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Call locals must be a JSON object.');
+  frame.locals = parsed;
   return next;
 }
 
@@ -212,12 +224,22 @@ export function validateBackup(data) {
     for (const snap of base.snapshots) {
       if (!snap || !['id','action','explanation','input','step','diagram'].every(k => typeof snap[k] === 'string') || !Number.isSafeInteger(snap.revision) || !snap.variables || typeof snap.variables !== 'object' || Array.isArray(snap.variables)) throw new Error('Invalid dry-run snapshot in backup.');
       validateFrames(snap.frames);
+      if (snap.visual !== undefined) snap.visual = validateVisual(snap.visual);
       for (const f of snap.frames) if (typeof f.label !== 'string' || typeof f.returned !== 'string' || !f.locals || typeof f.locals !== 'object') throw new Error('Invalid call frame.');
     }
     for (const r of base.reviews) if (!r || !['again','hard','good','easy'].includes(r.rating) || !Number.isFinite(Date.parse(r.at))) throw new Error('Invalid review history.');
     for (const r of base.revisions) if (!r || typeof r.algorithm !== 'string' || !Number.isSafeInteger(r.revision)) throw new Error('Invalid algorithm revision.');
     if (raw.due !== null && !Number.isFinite(Date.parse(raw.due))) throw new Error('Invalid review date.');
     base.due = raw.due;
+    if (raw.description !== undefined) {
+      if (typeof raw.description !== 'string') throw new Error('Invalid problem description.');
+      base.description = text(raw.description,30_000);
+    }
+    if (raw.contextSource !== undefined) {
+      const source = raw.contextSource;
+      if (!source || source.url !== base.url || !Number.isFinite(Date.parse(source.at)) || !Array.isArray(source.fields) || !source.fields.every(field => ['title','description','examples','constraints'].includes(field))) throw new Error('Invalid context source.');
+      base.contextSource = clone(source);
+    }
     return base;
   });
 }

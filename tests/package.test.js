@@ -12,3 +12,9 @@ test('standalone preview contains a valid self-contained module and no external 
   const result = spawnSync(process.execPath,['--check','--input-type=module'],{ input:script,encoding:'utf8' });
   assert.equal(result.status,0,result.stderr);
 });
+
+test('app and extension distributions use the same release version', async () => {
+  const app = JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'));
+  const extension = JSON.parse(await readFile(new URL('../extension/manifest.json',import.meta.url),'utf8'));
+  assert.equal(app.version,extension.version);
+});

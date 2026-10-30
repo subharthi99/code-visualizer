@@ -1,12 +1,14 @@
 # Code Visualizer — Product Requirements Document
 
-Status: early alpha implemented locally; full roadmap remains proposed. Version 0.5, October 30, 2026.
+Status: early alpha implemented locally; full roadmap remains proposed. Version 0.6, October 30, 2026.
 
 ## Implementation snapshot
 
 The first alpha includes a native-module browser workspace, three original guided exercises, staged hints, algorithm revisions, guided edge-case inputs and reference validators, manual call-stack/array snapshots, recall and fixed review scheduling, CSV mapping, JSON transfer, and a buildable Chrome capture/side-panel extension. See [development notes](DEVELOPMENT.md) for verification and limitations.
 
 The implementation uses dependency-free JavaScript instead of the provisional React/TypeScript stack. Local browser storage is implemented; no hosted service or account is required. Live code tracing, automatic free-form pseudocode evaluation, arbitrary-question tutoring, adaptive scheduling, and Notion API sync remain planned. Extension API tests use mocks; an additional native Chrome run passed 17 installed-extension assertions against live LeetCode pages, recorded in [browser results](browser-testing/2026-10-30.json). Requirements below remain the product targets, not a claim that every acceptance criterion has shipped.
+
+The v0.2 implementation adds selective rendered-question context import, eleven authored LeetCode lessons with attempt checkpoints, and editable array/pointer/tree/shared-object dry runs with change highlights. See [release notes](RELEASE_0_2.md) for tests and the live-permission verification gate.
 
 ## 1. Product outcome
 

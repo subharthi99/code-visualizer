@@ -5,6 +5,9 @@
 The app uses native JavaScript modules and CSS, with no runtime or development dependencies. This keeps the initial alpha usable without registry access or an AI service. The PRD's React/TypeScript stack was provisional; framework adoption can follow demonstrated complexity.
 
 - `src/content.js`: three original exercises, hints, reference walkthroughs, and category prompts.
+- `src/context.js`: capture normalization, selective context application, and source checks.
+- `src/lessons.js`: eleven URL-matched authored lessons and attempt/focus checkpoints.
+- `src/visual.js`, `src/visual-ui.js`: immutable diagram editing, graph validation, snapshot diffs, and accessible visual rendering.
 - `src/domain.js`: problem identity, algorithm revisions, dry-run state transitions, case validators, review policy, and import validation.
 - `src/persistence.js`: IndexedDB transactions with optimistic conflict detection for edits.
 - `src/app.js`: accessible workspace UI and event handling. Imported content is rendered as text.
@@ -30,9 +33,9 @@ The standard app, standalone preview, and extension use different browser storag
 
 ## Learning behavior
 
-Authored cases use explicit contracts. Tree input uses compact breadth-first JSON arrays with `null` children, such as `[1,2,null,3]`. Pair-sum requires exactly one pair of distinct indices. Subsets requires distinct input values. Custom problems receive generic prompts, not inferred constraints or fabricated outcomes.
+Authored cases use explicit contracts. Tree input uses compact breadth-first JSON arrays with `null` children, such as `[1,2,null,3]`. Pair-sum requires exactly one pair of distinct indices. Subsets requires distinct input values. Eleven exact supported LeetCode URLs receive authored hint ladders. Other custom problems receive generic prompts, not inferred constraints or fabricated outcomes. Lesson guidance does not reuse the practice exercises’ narrower input validators on external questions. Captured context is previewed before selected fields are applied; the learner’s approach and algorithm are preserved. Stored attempts can select authored checkpoint questions using explicit rules and focus controls; no AI service is called.
 
-Algorithm edits create a revision when a batch is autosaved or the editor loses focus. Saved snapshots retain their original revision and are labeled when outdated. Snapshots copy variables and frames; changing a later draft cannot mutate earlier states. JSON variables can describe shared objects explicitly, for example `{"path":{"ref":"p1"},"objects":{"p1":[4]}}`; this is a manual notation, not automatic heap tracing.
+Algorithm edits create a revision when a batch is autosaved or the editor loses focus. Saved snapshots retain their original revision and are labeled when outdated. Snapshots copy variables and frames; changing a later draft cannot mutate earlier states. The visual editor supports arrays and named pointers (including one-past-end), editable binary trees, and shared objects referenced by stable IDs. Diagrams are optional on old snapshots and are preserved in version-1 backups. Tree validation rejects cycles, dangling children, multiple parents, and disconnected nodes. Variable, pointer, object, tree, and call-state changes are shown against the preceding snapshot. This is manual state modeling, not automatic heap tracing. Active frame locals can be edited independently of suspended callers.
 
 Recorded review attempts are stored with a rating and an assistance flag. The flag currently detects reveal without a written reconstruction; it cannot determine whether a learner relied on other hints. Review policy `fixed-v1` schedules again/hard/good/easy at 1/1/3/7 local-calendar days. It makes no mastery or retention guarantee.
 
@@ -42,7 +45,7 @@ Build first, then load `dist/extension` using Chrome's **Load unpacked**. The to
 
 The background handler configures a tab-specific side-panel path and opens it during the user gesture. It falls back to an extension-owned tab if opening the panel fails. Clicking on an unsupported page shows a message and leaves manual link entry available. Each explicit capture includes a nonce so repeating capture can reopen the current question. Browser navigation does not silently switch a saved record. Reclick the toolbar action after changing questions.
 
-No host permissions, content scripts, cookies, or submission APIs are requested. URL capture needs no page scraping. Notebooks persist in extension-origin IndexedDB across panel closure. Installed-extension behavior was validated on Chrome 156.0.8078.48 on macOS arm64; browser-store publication remains separate. Neither mocked API tests nor one browser run establish compatibility with every supported Chrome version.
+No persistent host permissions, automatic content scripts, cookies, or submission APIs are requested. v0.2 adds `scripting` for explicit description import through the temporary `activeTab` grant. `extension/extract.js` reads a rendered description container, never the whole page or editor. Message handling checks the sender, source tab, expected question identity, and post-extraction URL. Navigating to another question while capture is pending discards the response. Failed capture leaves manual paste available. Notebooks persist in extension-origin IndexedDB across panel closure. Installed-extension behavior was validated on Chrome 156.0.8078.48 on macOS arm64; browser-store publication remains separate. Neither mocked API tests nor one browser run establish compatibility with every supported Chrome version.
 
 ## Validation
 
@@ -66,3 +69,7 @@ For future releases, repeat the checks below. The current run covers core flows,
 ## Still planned
 
 Live code execution, automatic checking of learner pseudocode, adaptive scheduling, arbitrary-problem AI tutoring, richer editable tree diagrams, Notion API integration, and automatic cross-device synchronization. The current app supports a useful pre-code loop but does not fulfill every future requirement in the PRD.
+
+## v0.2 verification
+
+See [release evidence](RELEASE_0_2.md) and [v0.2 browser checks](browser-testing/0.2.0.json). The v0.1 installed-extension run is historical; the newly added scripting permission requires approval before v0.2 live extraction can be checked.

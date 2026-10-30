@@ -1,5 +1,9 @@
 import { exercises, genericHints, genericCases, hintLabels } from './content.js';
-import { uid, clone, makeRecord, canonicalLeetCode, saveAlgorithm, addSnapshot, enterFrame, returnFrame, checkCase, reviewRecord, parseCSV, mapCSV, validateBackup, SCHEMA_VERSION, MAX_IMPORT_BYTES } from './domain.js';
+import { uid, clone, makeRecord, canonicalLeetCode, saveAlgorithm, addSnapshot, enterFrame, returnFrame, updateActiveFrame, checkCase, reviewRecord, parseCSV, mapCSV, validateBackup, SCHEMA_VERSION, MAX_IMPORT_BYTES } from './domain.js';
+import { emptyVisual, setVisualArray, putPointer, putTreeNode, putObject, putReference, stateChanges, visualChanges } from './visual.js';
+import { renderVisualEditor, renderVisualView, renderChangeList } from './visual-ui.js';
+import { lookupLesson, attemptCheckpoint } from './lessons.js';
+import { normalizeContext, applyContext } from './context.js';
 import { openDatabase, readRecords, writeRecords } from './persistence.js';
 
 const root = document.querySelector('#app');
@@ -9,6 +13,9 @@ let records = [], activeId = '', tab = 'Understand', view = 'workspace', filter 
 let frameDraft = [], cursor = -1, caseIndex = 0, caseLevel = 0, recallRevealed = false;
 let dirty = false, saveTimer, noticeTimer, saving = Promise.resolve(), importPreview;
 let renderedKey = '';
+let sourceTabId = null;
+let hintFocus = 'approach';
+let visualDraft = emptyVisual();
 const formDrafts = new Map();
 const savedVersions = new Map();
 const algorithmDrafts = new Map();
@@ -59,7 +66,7 @@ function field(label, key, placeholder = '', rows = 3) {
   return `<label class="field"><span>${label}</span><textarea data-field="${key}" rows="${rows}" placeholder="${e(placeholder)}">${e(current()[key])}</textarea></label>`;
 }
 
-function resetSession() { frameDraft = []; cursor = -1; caseIndex = 0; caseLevel = 0; recallRevealed = false; }
+function resetSession() { visualDraft = emptyVisual(); hintFocus = 'approach'; frameDraft = []; cursor = -1; caseIndex = 0; caseLevel = 0; recallRevealed = false; }
 
 async function selectRecord(id) {
   await persist();
@@ -131,7 +138,7 @@ function welcome() {
     <div class="section-heading"><h2>Start with a small problem</h2>${badge('No code needed')}</div>
     <div class="exercise-grid">${exercises.map((x,i) => `<article class="exercise-card"><span class="card-number">0${i+1}</span><div class="eyebrow">${e(x.category)}</div><h3>${e(x.title)}</h3><p>${e(x.prompt)}</p>${button('Explore this problem <span aria-hidden="true">↗</span>', 'exercise', `data-id="${x.id}"`, 'text-button')}</article>`).join('')}</div>
     <div class="welcome-import"><div><h3>Already working on something?</h3><p>Add a LeetCode link or bring your own question.</p></div>${button('Add your problem ↗', 'add', '', 'secondary')}</div>
-    <p class="muted small">Guided exercises include authored hints and reference checks. Other problems start with general prompts and your own specification.</p></div>`;
+    <p class="muted small">Guided exercises include reference checks. Eleven supported LeetCode questions also have authored lessons; other questions use general prompts and your own specification.</p></div>`;
 }
 
 function workspace() {
@@ -142,16 +149,16 @@ function workspace() {
 }
 
 function understand() {
-  const x = exercise();
+  const x = exercise(), r = current();
   return `<div class="workspace-columns"><div class="stack">
-    ${x ? `<article class="panel problem-brief"><div class="eyebrow">THE PROBLEM</div><h2>${e(x.title)}</h2><p>${e(x.description)}</p><div class="example-block"><span>ONE EXAMPLE</span><p>${e(x.example)}</p></div></article>` : `<article class="panel"><h2>Give the problem a shape</h2><p>The link keeps your work connected. Add the relevant problem details below so you can reason about the actual contract.</p></article>`}
-    <article class="panel"><div class="section-heading"><h2>In your own words</h2>${badge('Start here')}</div>${field('What are you being asked to find?', 'restatement', 'Describe the input and the required output. What would a correct answer mean?')}${field('Constraints & assumptions', 'constraints', 'What is allowed? Input size, duplicates, empty inputs, ordering…')}${field('An example you understand', 'example', 'Choose a small input. What should the output be, and why?')}${field('Your first approach', 'approach', 'A slow, straightforward idea is a good place to start.', 4)}<div class="panel-actions"><span class="muted small">You can revise everything as you learn.</span>${button('Shape the algorithm →', 'next', 'data-tab="Algorithm"', 'primary')}</div></article>
+    ${r.description ? `<article class="panel problem-brief"><div class="eyebrow">IMPORTED QUESTION CONTEXT</div><h2>${e(r.title)}</h2><pre class="statement">${e(r.description)}</pre>${r.example ? `<details><summary>Examples</summary><pre>${e(r.example)}</pre></details>` : ''}</article>` : x ? `<article class="panel problem-brief"><div class="eyebrow">THE PROBLEM</div><h2>${e(x.title)}</h2><p>${e(x.description)}</p><div class="example-block"><span>ONE EXAMPLE</span><p>${e(x.example)}</p></div></article>` : `<article class="panel"><h2>Give the problem a shape</h2><p>The link keeps your work connected. Add the relevant problem details below so you can reason about the actual contract.</p></article>`}
+    <article class="panel"><div class="context-tools">${button('Import / edit question context', 'import-context', '', 'secondary')}<p class="muted small">Preview before replacing any saved fields.</p></div><div class="section-heading"><h2>In your own words</h2>${badge('Start here')}</div>${field('What are you being asked to find?', 'restatement', 'Describe the input and the required output. What would a correct answer mean?')}${field('Constraints & assumptions', 'constraints', 'What is allowed? Input size, duplicates, empty inputs, ordering…')}${field('An example you understand', 'example', 'Choose a small input. What should the output be, and why?')}${field('Your first approach', 'approach', 'A slow, straightforward idea is a good place to start.', 4)}<div class="panel-actions"><span class="muted small">You can revise everything as you learn.</span>${button('Shape the algorithm →', 'next', 'data-tab="Algorithm"', 'primary')}</div></article>
   </div>${hintPanel()}</div>`;
 }
 
 function hintPanel() {
-  const r = current(), hints = exercise()?.hints || genericHints;
-  return `<aside class="panel hint-panel"><div class="eyebrow">A NUDGE, NOT A SPOILER</div><h2>A little help thinking</h2><p>${exercise() ? 'Reveal one hint at a time. Take a moment to try it before asking for the next.' : 'General reasoning prompts. This question has no authored hint ladder yet.'}</p><ol class="hints">${hints.map((h,i) => `<li class="${i < r.hintCount ? 'revealed' : 'locked'}"><span class="hint-number">${i+1}</span><div><strong>${hintLabels[i]}</strong>${i < r.hintCount ? `<p>${e(h)}</p>` : '<p>Reveal when you need it.</p>'}</div></li>`).join('')}</ol>${r.hintCount < hints.length ? button(`Reveal ${r.hintCount ? 'next hint' : 'first hint'} <span aria-hidden="true">↗</span>`, 'hint', '', 'secondary wide') : '<p class="muted small">You’ve revealed all five hints. Try explaining the approach without looking.</p>'}<div class="hint-footnote">Your hint history is saved with this problem.</div></aside>`;
+  const r = current(), lesson = lookupLesson(r), hints = lesson?.hints || genericHints;
+  return `<aside class="panel hint-panel"><div class="eyebrow">A NUDGE, NOT A SPOILER</div><h2>A little help thinking</h2><p>${lesson ? (r.exerciseId ? 'Reveal one hint at a time. Take a moment to try it before asking for the next.' : 'Authored lesson for this question. Reveal one hint at a time.') : 'General reasoning prompts. This question has no authored hint ladder yet.'}</p><ol class="hints">${hints.map((h,i) => `<li class="${i < r.hintCount ? 'revealed' : 'locked'}"><span class="hint-number">${i+1}</span><div><strong>${hintLabels[i]}</strong>${i < r.hintCount ? `<p>${e(h)}</p>` : '<p>Reveal when you need it.</p>'}</div></li>`).join('')}</ol>${r.hintCount < hints.length ? button(`Reveal ${r.hintCount ? 'next hint' : 'first hint'} <span aria-hidden="true">↗</span>`, 'hint', '', 'secondary wide') : '<p class="muted small">You’ve revealed all five hints. Try explaining the approach without looking.</p>'}<div class="hint-footnote">Your hint history is saved with this problem.</div>${r.hintCount ? `<div class="attempt-checkpoint"><h3>Where are you stuck?</h3><div class="focus-buttons">${['approach','recursion','implementation'].map(focus => button(focus[0].toUpperCase()+focus.slice(1),'hint-focus',`data-focus="${focus}" aria-pressed="${hintFocus === focus}"`,'secondary compact')).join('')}</div><p>${e(attemptCheckpoint(r,hintFocus))}</p><small>Rule-based ${lesson ? 'authored' : 'general'} checkpoint using your saved attempt. This is a prompt, not a correctness verdict.</small></div>` : ''}</aside>`;
 }
 
 function algorithm() {
@@ -170,11 +177,21 @@ function edgeCases() {
 
 function dryRun() {
   const r = current(), selected = cursor >= 0 ? r.snapshots[cursor] : null;
-  return `<div class="stack"><div class="dry-intro"><div><div class="eyebrow">SLOW DOWN THE THINKING</div><h2>Run your algorithm by hand.</h2><p>Record what changes, one decision at a time.</p></div>${badge('Manual dry run · not code execution')}</div><div class="workspace-columns"><div class="stack"><article class="panel"><details ${r.algorithm ? '' : 'open'}><summary>Your current algorithm · revision ${r.revision}</summary><pre>${e(r.algorithm || 'Write your algorithm in the Algorithm tab, then test its steps here.')}</pre></details><form id="snapshot-form"><div class="field-pair"><label class="field"><span>Input</span><input name="input" value="${e(selected?.input || '')}" placeholder="The input you are testing"></label><label class="field"><span>Algorithm step</span><input name="step" value="${e(selected?.step || '')}" placeholder="For example: 3 / combine child depths"></label></div><label class="field"><span>Action taken</span><input name="action" required placeholder="What happens at this step?"></label><label class="field"><span>Variables after the action (JSON object)</span><textarea class="mono" name="variables" rows="3" required>${e(JSON.stringify(selected?.variables || {}, null, 2))}</textarea></label><label class="field"><span>Why does this step follow?</span><textarea name="explanation" rows="2" required placeholder="Which condition or algorithm rule led here?"></textarea></label><label class="field"><span>Array sketch (optional JSON array)</span><input name="diagram" value="${e(selected?.diagram || '')}" placeholder="[2, 3, 4]"></label><p class="muted small">Adding a snapshot while viewing an earlier step appends a new attempt; it does not overwrite your history.</p><div class="panel-actions">${button('Clear draft', 'clear-draft', '', 'quiet')}<button type="submit" class="primary">Record snapshot ＋</button></div></form></article>
+  const previous = cursor > 0 ? r.snapshots[cursor-1] : null;
+  return `<div class="stack"><div class="dry-intro"><div><div class="eyebrow">SLOW DOWN THE THINKING</div><h2>Run your algorithm by hand.</h2><p>Record what changes, one decision at a time.</p></div>${badge('Manual dry run · not code execution')}</div><div class="workspace-columns"><div class="stack">${renderVisualEditor(visualDraft,selected?.visual || null)}<article class="panel"><details ${r.algorithm ? '' : 'open'}><summary>Your current algorithm · revision ${r.revision}</summary><pre>${e(r.algorithm || 'Write your algorithm in the Algorithm tab, then test its steps here.')}</pre></details><form id="snapshot-form"><div class="field-pair"><label class="field"><span>Input</span><input name="input" value="${e(selected?.input || '')}" placeholder="The input you are testing"></label><label class="field"><span>Algorithm step</span><input name="step" value="${e(selected?.step || '')}" placeholder="For example: 3 / combine child depths"></label></div><label class="field"><span>Action taken</span><input name="action" required placeholder="What happens at this step?"></label><label class="field"><span>Variables after the action (JSON object)</span><textarea class="mono" name="variables" rows="3" required>${e(JSON.stringify(selected?.variables || {}, null, 2))}</textarea></label><label class="field"><span>Why does this step follow?</span><textarea name="explanation" rows="2" required placeholder="Which condition or algorithm rule led here?"></textarea></label><p class="muted small">Adding a snapshot while viewing an earlier step appends a new attempt; it does not overwrite your history.</p><div class="panel-actions">${button('Clear draft', 'clear-draft', '', 'quiet')}<button type="submit" class="primary">Record snapshot ＋</button></div></form></article>
     <article class="panel"><div class="section-heading"><h2>Your timeline</h2><div class="inline-actions">${button('← Previous', 'prev-snapshot', `${cursor <= 0 ? 'disabled' : ''} aria-label="Previous snapshot"`, 'secondary compact')}${button('Next →', 'next-snapshot', `${cursor >= r.snapshots.length - 1 ? 'disabled' : ''} aria-label="Next snapshot"`, 'secondary compact')}</div></div>${r.snapshots.length ? `<div class="table-scroll"><table><caption class="sr-only">Learner-authored dry-run snapshots</caption><thead><tr><th>Step</th><th>Action</th><th>State</th><th>Revision</th></tr></thead><tbody>${r.snapshots.map((s,i) => `<tr class="${i === cursor ? 'selected-row' : ''}"><td>${button(String(i+1).padStart(2,'0'), 'snapshot', `data-index="${i}" aria-label="Open snapshot ${i+1}"`, 'step-button')}</td><td>${e(s.action)}</td><td><code>${e(JSON.stringify(s.variables))}</code></td><td>${s.revision}${s.revision !== r.revision ? ' · earlier' : ''}</td></tr>`).join('')}</tbody></table></div>` : empty('Your reasoning, step by step.', 'Record your first snapshot to begin a replayable dry run.')}</article>
     ${exercise() ? `<article class="panel"><details><summary>Reveal an authored reference dry run</summary><p class="muted small">A worked example, not a trace of your algorithm. ${e(exercise().example)}</p>${exercise().reference.map(row => `<div class="reference-step"><span>${row[0]}</span><div><strong>${e(row[1])}</strong><code>${e(row[2])}</code><p>${e(row[3])}</p></div></div>`).join('')}</details></article>` : ''}</div>
-    <aside class="stack"><article class="panel"><div class="eyebrow">CALLS & RETURNS</div><h2>Build the call stack</h2><p>Push a child call. Return a value to its suspended caller. These actions become part of your next snapshot.</p><div id="frame-list">${renderFrames(frameDraft)}${renderCallTree(frameDraft)}</div><label class="field"><span>Call label</span><input id="frame-label" placeholder="depth(left)"></label><label class="field"><span>Call locals (JSON object)</span><input id="frame-locals" value="{}"></label>${button('Enter call ↓', 'enter-frame', '', 'secondary wide')}<div class="return-controls"><label class="field"><span>Value returned by the active call</span><input id="return-value" placeholder="1"></label>${button('Return to caller ↑', 'return-frame', '', 'secondary wide')}</div></article>
-    ${selected ? `<article class="panel tint"><div class="eyebrow">SNAPSHOT ${cursor+1} · REVISION ${selected.revision}</div><h3>${e(selected.action)}</h3><p>${e(selected.explanation)}</p>${selected.revision !== r.revision ? '<p class="warning">This snapshot belongs to an earlier algorithm revision.</p>' : ''}${renderArray(selected.diagram)}</article>` : ''}</aside></div></div>`;
+    <aside class="stack"><article class="panel"><div class="eyebrow">CALLS & RETURNS</div><h2>Build the call stack</h2><p>Push a child call. Return a value to its suspended caller. These actions become part of your next snapshot.</p><div id="frame-list">${renderFrames(frameDraft)}${renderCallTree(frameDraft)}</div><label class="field"><span>Call label</span><input id="frame-label" placeholder="depth(left)"></label><label class="field"><span>Call locals (JSON object)</span><input id="frame-locals" value="{}"></label>${button('Enter call ↓', 'enter-frame', '', 'secondary wide')}${button('Update active call locals', 'update-frame', '', 'quiet')}<div class="return-controls"><label class="field"><span>Value returned by the active call</span><input id="return-value" placeholder="1"></label>${button('Return to caller ↑', 'return-frame', '', 'secondary wide')}</div></article>
+    ${selected ? `<article class="panel tint"><div class="eyebrow">SNAPSHOT ${cursor+1} · REVISION ${selected.revision}</div><h3>${e(selected.action)}</h3><p>${e(selected.explanation)}</p>${selected.revision !== r.revision ? '<p class="warning">This snapshot belongs to an earlier algorithm revision.</p>' : ''}${selected.visual ? renderVisualView(selected.visual,previous?.visual || null,false) : renderArray(selected.diagram)}${renderChangeList([...stateChanges(previous?.variables || {},selected.variables),...visualChanges(previous?.visual,selected.visual),...stateChanges(Object.fromEntries((previous?.frames || []).map(f => [`Call ${f.label} #${f.id.slice(0,4)}`,{ status:f.status,locals:f.locals,returned:f.returned }])),Object.fromEntries(selected.frames.map(f => [`Call ${f.label} #${f.id.slice(0,4)}`,{ status:f.status,locals:f.locals,returned:f.returned }])))] )}</article>` : ''}</aside></div></div>`;
+}
+
+function restoreSnapshotDraft() {
+  const snapshot = current()?.snapshots[cursor];
+  frameDraft = clone(snapshot?.frames || []);
+  visualDraft = snapshot?.visual ? clone(snapshot.visual) : emptyVisual();
+  if (!snapshot?.visual && snapshot?.diagram) {
+    try { visualDraft = setVisualArray(visualDraft,JSON.parse(snapshot.diagram)); } catch { /* Keep an empty draft for an unsupported legacy sketch. */ }
+  }
 }
 
 function renderFrames(frames) {
@@ -197,7 +214,7 @@ function renderArray(value) {
 }
 
 function recall() {
-  const r = current(), x = exercise();
+  const r = current(), x = lookupLesson(r);
   return `<div class="workspace-columns"><div class="stack"><article class="panel"><div class="eyebrow">MAKE THE REASONING STICK</div><h2>Leave a cue for your future self.</h2><p>Remember why the approach works, not just what the code looked like.</p>${field('Your memory cue', 'cue', 'A short question that brings back the key idea.')}${field('The mistake that taught you something', 'mistake', 'What I assumed → why it failed → what I changed.')}<div class="panel-actions"><span class="muted small">Fixed prototype schedule: 1, 1, 3, or 7 days.</span>${button('Schedule a review for tomorrow', 'schedule', '', 'primary')}</div></article>
     <article class="panel recall-card"><div class="eyebrow">A QUICK RECONSTRUCTION</div><h2>Can you recover the approach?</h2><p>${e(r.cue || 'Explain your approach, dry-run one transition, and invent a fresh edge case. Why would that case catch a mistake?')}</p><label class="field"><span>Try from memory before revealing</span><textarea id="recall-attempt" rows="5" placeholder="Reconstruct your algorithm and explain a tricky step…"></textarea></label>${!recallRevealed ? button('Reveal my saved reasoning', 'reveal-recall', '', 'secondary') : `<div class="recall-answer"><h3>Your saved approach</h3><pre>${e(r.algorithm || r.approach || 'No approach saved yet.')}</pre><p><strong>Invariant:</strong> ${e(r.invariant || 'Not recorded yet.')}</p><p><strong>Mistake:</strong> ${e(r.mistake || 'Not recorded yet.')}</p></div><p>How much could you explain independently?</p><div class="rating-buttons">${['again','hard','good','easy'].map((rating,i) => button(`${rating[0].toUpperCase()+rating.slice(1)}<small>${[1,1,3,7][i]} day${i > 1 ? 's' : ''}</small>`, 'rate', `data-rating="${rating}"`, 'secondary')).join('')}</div>`}</article></div>
     <aside class="stack">${x ? `<article class="panel"><details><summary>Reveal pattern & a useful comparison</summary><h3>${e(x.pattern)}</h3><p>${e(x.invariant)}</p><div class="rule"></div><p>${e(x.contrast)}</p></details><details class="solution-details"><summary>Reveal full approach explanation</summary><p>${e(x.solution)}</p></details></article>` : ''}<article class="panel tint"><h3>What counts as remembering?</h3><p>Can you explain the invariant, reconstruct a step, and apply it to a new input? Recognizing an answer after reveal is different from recalling it.</p><p class="muted small">Review ratings are self-assessments. They do not establish mastery.</p></article><article class="panel"><h3>Review history</h3><p>${r.due ? `Next review: ${e(new Date(r.due).toLocaleDateString())}` : 'Not scheduled yet.'}</p>${r.reviews.slice(-5).reverse().map(rev => `<p class="small">${e(new Date(rev.at).toLocaleDateString())} · ${e(rev.rating)}${rev.assisted ? ' · revealed without an attempt' : ''}</p>`).join('')}</article></aside></div>`;
@@ -221,8 +238,31 @@ function caseIdentity(input) {
   catch { return `text:${input.trim()}`; }
 }
 
+function contextDialog(preview, message = '') {
+  const r = current();
+  showModal(`${modalHeading('Review question context')}<p>${e(message || 'Edit the captured fields, then choose which ones to apply. Your approach and algorithm are preserved.')}</p>${preview.truncated ? '<p class="warning">Capture was limited to 30,000 characters. Check for missing details.</p>' : ''}<form id="context-form"><input type="hidden" name="url" value="${e(r.url)}">${[['title','Title',r.title],['description','Problem description',r.description],['examples','Examples',r.example],['constraints','Constraints',r.constraints]].map(([key,label,existing]) => `<label class="check-field"><input type="checkbox" name="use-${key}" ${!existing ? 'checked' : ''}>Replace ${label.toLowerCase()}${existing ? ' (currently saved)' : ''}</label><label class="field"><span>${label}</span><textarea name="${key}" rows="${key === 'description' ? 7 : 3}">${e(preview[key] || '')}</textarea></label>`).join('')}<button type="submit" class="primary wide">Apply selected context</button></form>`);
+}
+
+async function importQuestionContext() {
+  await persist();
+  const r = current();
+  const manual = { title:r.title,description:r.description || '',examples:r.example,constraints:r.constraints };
+  if (!globalThis.chrome?.runtime?.id || sourceTabId === null || !r.url) { contextDialog(manual,'Paste the description, examples, and constraints, then select the fields to apply. Extension capture is available after clicking Study this problem on a LeetCode description page.'); return; }
+  notify('Reading this question’s rendered description…');
+  try {
+    const result = await chrome.runtime.sendMessage({ type:'capture-context',tabId:sourceTabId,url:r.url });
+    if (!result?.ok) throw new Error(result?.error || 'Could not read context.');
+    if (current()?.id !== r.id) { notify('You switched questions during capture. Import context again for the current question.'); return; }
+    if (result.context.url !== r.url) throw new Error('The captured description does not match this question.');
+    contextDialog(result.context);
+  } catch (error) {
+    if (current()?.id !== r.id) { notify('The question changed during capture. Import context again for the current question.'); return; }
+    contextDialog(manual,`${error.message} You can paste the context below. Click the extension toolbar action again if its temporary page access expired.`);
+  }
+}
+
 function addDialog() {
-  showModal(`${modalHeading('Bring your own problem')}<p>Capture a LeetCode question, or create a blank workspace.</p><form id="add-form"><label class="field"><span>LeetCode URL (optional)</span><input name="url" type="url" placeholder="https://leetcode.com/problems/two-sum/"></label><label class="field"><span>Title</span><input name="title" maxlength="200" placeholder="Name your problem (optional for a link)"></label><p class="muted small">Links are deduplicated. Existing notes reopen automatically. Custom problems include general prompts, not question-specific answers.</p><button class="primary wide" type="submit">Open workspace ↗</button></form>`);
+  showModal(`${modalHeading('Bring your own problem')}<p>Capture a LeetCode question, or create a blank workspace.</p><form id="add-form"><label class="field"><span>LeetCode URL (optional)</span><input name="url" type="url" placeholder="https://leetcode.com/problems/two-sum/"></label><label class="field"><span>Title</span><input name="title" maxlength="200" placeholder="Name your problem (optional for a link)"></label><p class="muted small">Links are deduplicated. Existing notes reopen automatically. Supported questions receive authored hints. Other questions receive general prompts.</p><button class="primary wide" type="submit">Open workspace ↗</button></form>`);
 }
 
 function downloadBackup() {
@@ -271,15 +311,17 @@ document.addEventListener('click', async event => {
     const action = el.dataset.action;
     if (action === 'home' || action === 'workspace') { await persist(); view = 'workspace'; if (action === 'home') activeId = ''; render(); }
     if (action === 'add') addDialog();
+    if (action === 'import-context') await importQuestionContext();
     if (action === 'close-modal') modal.close();
     if (action === 'exercise') await openRecord(makeRecord({ exerciseId: el.dataset.id }));
     if (action === 'select') await selectRecord(el.dataset.id);
     if (action === 'reviews') { await persist(); view = 'reviews'; render(); }
     if (action === 'tab' || action === 'next') {
-      await persist(); tab = el.dataset.tab; cursor = current().snapshots.length - 1; frameDraft = clone(current().snapshots[cursor]?.frames || []); render();
+      await persist(); tab = el.dataset.tab; cursor = current().snapshots.length - 1; restoreSnapshotDraft(); render();
       document.querySelector(`#tab-${tabs.indexOf(tab)}`).focus();
     }
-    if (action === 'hint') { current().hintHistory.push({ level: current().hintCount + 1, at: new Date().toISOString() }); current().hintCount = Math.min(5, current().hintCount + 1); markDirty(); await persist(); render(); }
+    if (action === 'hint-focus') { if (['approach','recursion','implementation'].includes(el.dataset.focus)) hintFocus = el.dataset.focus; render(); }
+    if (action === 'hint') { current().hintHistory.push({ focus:hintFocus,revision:current().revision,level: current().hintCount + 1, at: new Date().toISOString() }); current().hintCount = Math.min(5, current().hintCount + 1); markDirty(); await persist(); render(); }
     if (action === 'suggest-case') { caseLevel = 1; render(); }
     if (action === 'reveal-case') { caseLevel = 2; render(); }
     if (action === 'next-case') { caseIndex++; caseLevel = 0; render(); }
@@ -292,15 +334,30 @@ document.addEventListener('click', async event => {
     if (action === 'check-case') { const c = current().cases.find(c => c.id === el.dataset.id); c.reference = checkCase(current().exerciseId, c.input); markDirty(); await persist(); render(); }
     if (action === 'run-case') {
       const c = current().cases.find(c => c.id === el.dataset.id);
-      await persist(); tab = 'Dry run'; cursor = -1; frameDraft = []; render(); document.querySelector('#snapshot-form').elements.input.value = c.input;
+      await persist(); tab = 'Dry run'; cursor = -1; frameDraft = []; visualDraft = emptyVisual(); render(); document.querySelector('#snapshot-form').elements.input.value = c.input;
     }
+    if (action === 'visual-mode') { visualDraft = emptyVisual(el.dataset.kind); render(); }
+    if (action === 'visual-set-array') { visualDraft = setVisualArray(visualDraft,JSON.parse(document.querySelector('#array-values').value)); render(); }
+    if (action === 'visual-select-cell') { const index = Number(el.dataset.index); document.querySelector('#array-cell-index').value = index; document.querySelector('#array-cell-value').value = JSON.stringify(visualDraft.values[index]); }
+    if (action === 'visual-edit-cell') {
+      const index = Number(document.querySelector('#array-cell-index').value), values = [...visualDraft.values];
+      if (!Number.isInteger(index) || index < 0 || index >= values.length) throw new Error('Choose an existing array cell index.');
+      values[index] = JSON.parse(document.querySelector('#array-cell-value').value); visualDraft = setVisualArray(visualDraft,values); render();
+    }
+    if (action === 'visual-pointer') { visualDraft = putPointer(visualDraft,document.querySelector('#pointer-name').value,Number(document.querySelector('#pointer-index').value)); render(); }
+    if (action === 'visual-remove-pointer') { visualDraft = { ...visualDraft,pointers:visualDraft.pointers.filter(p => p.name !== el.dataset.name) }; render(); }
+    if (action === 'visual-node') { visualDraft = putTreeNode(visualDraft,{ id:document.querySelector('#tree-id').value,value:JSON.parse(document.querySelector('#tree-value').value),parentId:document.querySelector('#tree-parent').value,side:document.querySelector('#tree-side').value }); render(); }
+    if (action === 'visual-select-node') { visualDraft = { ...visualDraft,activeNodeId:el.dataset.id }; render(); const node = visualDraft.nodes.find(n => n.id === el.dataset.id); document.querySelector('#tree-id').value = node.id; document.querySelector('#tree-value').value = JSON.stringify(node.value); }
+    if (action === 'visual-object') { visualDraft = putObject(visualDraft,document.querySelector('#object-id').value,JSON.parse(document.querySelector('#object-values').value)); render(); }
+    if (action === 'visual-reference') { visualDraft = putReference(visualDraft,document.querySelector('#reference-name').value,document.querySelector('#reference-target').value); render(); }
     if (action === 'enter-frame') { frameDraft = enterFrame(frameDraft, document.querySelector('#frame-label').value, document.querySelector('#frame-locals').value); document.querySelector('#frame-list').innerHTML = renderFrames(frameDraft) + renderCallTree(frameDraft); }
+    if (action === 'update-frame') { frameDraft = updateActiveFrame(frameDraft,document.querySelector('#frame-locals').value); document.querySelector('#frame-list').innerHTML = renderFrames(frameDraft) + renderCallTree(frameDraft); }
     if (action === 'return-frame') { frameDraft = returnFrame(frameDraft, document.querySelector('#return-value').value); document.querySelector('#frame-list').innerHTML = renderFrames(frameDraft) + renderCallTree(frameDraft); }
     if (['snapshot','prev-snapshot','next-snapshot'].includes(action)) {
       cursor = action === 'snapshot' ? Number(el.dataset.index) : cursor + (action === 'prev-snapshot' ? -1 : 1);
-      cursor = Math.max(0, Math.min(cursor, current().snapshots.length-1)); frameDraft = clone(current().snapshots[cursor]?.frames || []); render();
+      cursor = Math.max(0, Math.min(cursor, current().snapshots.length-1)); restoreSnapshotDraft(); render();
     }
-    if (action === 'clear-draft') { cursor = -1; frameDraft = []; render(); }
+    if (action === 'clear-draft') { cursor = -1; frameDraft = []; visualDraft = emptyVisual(); formDrafts.delete(`${activeId}:${view}:${tab}:-1`); renderedKey = ''; render(); }
     if (action === 'schedule') { current().due = new Date(Date.now()+86_400_000).toISOString(); current().status = 'Practiced'; markDirty(); await persist(); notify('Review scheduled for tomorrow.'); render(); }
     if (action === 'review-record') { await selectRecord(el.dataset.id); tab = 'Recall'; render(); }
     if (action === 'reveal-recall') {
@@ -330,6 +387,11 @@ document.addEventListener('submit', async event => {
   event.preventDefault(); const form = event.target;
   try {
     const data = Object.fromEntries(new FormData(form));
+    if (form.id === 'context-form') {
+      const old = current(), fields = ['title','description','examples','constraints'].filter(key => Object.hasOwn(data,`use-${key}`));
+      if (!fields.length) throw new Error('Select at least one field to apply.');
+      records[records.indexOf(old)] = applyContext(old,data,fields); markDirty(); await persist(); modal.close(); render(); notify('Selected question context saved.');
+    }
     if (form.id === 'add-form') { if (!data.url.trim() && !data.title.trim()) throw new Error('Enter a problem title or a LeetCode link.'); await openRecord(makeRecord({ url:data.url.trim(), title:data.title.trim() })); modal.close(); }
     if (form.id === 'case-form') {
       if (current().cases.some(c => caseIdentity(c.input) === caseIdentity(data.input))) throw new Error('That input is already in your collection.');
@@ -338,7 +400,7 @@ document.addEventListener('submit', async event => {
     }
     if (form.id === 'snapshot-form') {
       if (data.diagram && !Array.isArray(JSON.parse(data.diagram))) throw new Error('An array sketch must be a JSON array.');
-      const old = current(), next = addSnapshot(old, { ...data, frames:frameDraft });
+      const old = current(), next = addSnapshot(old, { ...data, frames:frameDraft, visual:visualDraft });
       records[records.indexOf(old)] = next; cursor = next.snapshots.length-1; markDirty(); await persist(); render(); notify('Snapshot recorded.');
     }
     if (form.id === 'csv-map') {
@@ -361,6 +423,7 @@ modal.addEventListener('change', async event => {
 });
 
 root.addEventListener('keydown', event => {
+  if (event.target.closest?.('[data-action="visual-select-node"]') && ['Enter',' '].includes(event.key)) { event.preventDefault(); event.target.dispatchEvent(new Event('click',{ bubbles:true })); return; }
   if (event.target.getAttribute('role') !== 'tab' || !['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
   event.preventDefault(); const index = tabs.indexOf(tab);
   const target = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length-1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
@@ -375,6 +438,8 @@ channel?.addEventListener('message', () => notify('This notebook changed in anot
 async function captureFromHash() {
   const params = new URLSearchParams(location.hash.slice(1));
   const url = params.get('problem');
+  const sourceId = params.get('tab');
+  if (sourceId !== null && /^\d+$/.test(sourceId)) { sourceTabId = Number(sourceId); try { sessionStorage.setItem('cv-source-tab',sourceId); } catch {} }
   if (url) {
     canonicalLeetCode(url);
     await openRecord(makeRecord({ url }));
@@ -386,7 +451,7 @@ async function captureFromHash() {
 async function init() {
   try {
     await openDatabase(); records = await readRecords(); records.forEach(r => savedVersions.set(r.id,r.updatedAt));
-    try { activeId = sessionStorage.getItem('cv-active') || ''; } catch { /* Optional selection. */ }
+    try { activeId = sessionStorage.getItem('cv-active') || ''; const savedTab = sessionStorage.getItem('cv-source-tab'); if (/^\d+$/.test(savedTab || '')) sourceTabId = Number(savedTab); } catch { /* Optional selection. */ }
     if (!current()) activeId = '';
     await captureFromHash(); render();
     window.addEventListener('hashchange', () => captureFromHash().catch(error => notify(error.message, true)));

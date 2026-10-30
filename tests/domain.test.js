@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { canonicalLeetCode, makeRecord, saveAlgorithm, addSnapshot, enterFrame, returnFrame, reviewRecord, checkCase, parseCSV, mapCSV, validateBackup } from '../src/domain.js';
 import { exercises } from '../src/content.js';
+import * as domainAPI from '../src/domain.js';
 
 test('problem identity is stable across supported LeetCode routes', () => {
   for (const suffix of ['', '/', '/description/', '/solutions/12345/a-solution/', '/submissions/987/', '/editorial/?envType=study-plan#example']) {
@@ -135,4 +136,13 @@ test('all review ratings retain prior history and use the documented interval', 
     assert.deepEqual(result.reviews[0],record.reviews[0]);
     assert.equal(record.reviews.length,1);
   }
+});
+
+test('editing active call locals preserves suspended caller locals and earlier snapshots', () => {
+  const frames = enterFrame(enterFrame([],'root','{"depth":0}'),'child','{"depth":1}');
+  const updated = domainAPI.updateActiveFrame(frames,'{"depth":2}');
+  assert.deepEqual(updated[0].locals,{ depth:0 });
+  assert.deepEqual(updated[1].locals,{ depth:2 });
+  assert.deepEqual(frames[1].locals,{ depth:1 });
+  assert.throws(() => domainAPI.updateActiveFrame([], '{}'),/active|call/i);
 });

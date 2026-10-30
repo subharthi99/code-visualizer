@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Code Visualizer — Study this problem",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Capture a LeetCode link and reason through the problem with hints, algorithm notes, edge cases, and manual dry runs.",
   "minimum_chrome_version": "116",
-  "permissions": ["activeTab", "sidePanel"],
+  "permissions": ["activeTab", "sidePanel", "scripting"],
   "action": { "default_title": "Study this problem" },
   "background": { "service_worker": "background.js", "type": "module" },
   "side_panel": { "default_path": "index.html" },

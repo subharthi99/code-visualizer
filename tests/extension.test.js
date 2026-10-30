@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-test('extension requests only activeTab and sidePanel, with no page injection', async () => {
+test('extension requests activeTab, sidePanel, and user-triggered scripting without persistent page access', async () => {
   const manifest = JSON.parse(await readFile(new URL('../extension/manifest.json',import.meta.url),'utf8'));
   assert.equal(manifest.manifest_version,3);
-  assert.deepEqual(manifest.permissions,['activeTab','sidePanel']);
+  assert.deepEqual(manifest.permissions,['activeTab','sidePanel','scripting']);
   assert.equal(manifest.host_permissions,undefined);
   assert.equal(manifest.content_scripts,undefined);
 });
