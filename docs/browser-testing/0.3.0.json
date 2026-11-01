@@ -1,0 +1,86 @@
+{
+  "release": "0.3.0",
+  "date": "2026-11-01",
+  "runner": "cua_repl driving native Google Chrome on macOS",
+  "build": "standalone app; new features tested before version metadata bump",
+  "assertions": [
+    {
+      "scenario": "Patterns tab shows a supported family, invariant, failed assumption, and related contracts",
+      "result": "pass"
+    },
+    {
+      "scenario": "Pattern comparison notes persist across tab changes and browser reload",
+      "result": "pass"
+    },
+    {
+      "scenario": "Opening a related question creates an authored workspace and existing notes reopen unchanged",
+      "result": "pass"
+    },
+    {
+      "scenario": "Linked bracket challenges display their bounded local practice contract",
+      "result": "pass"
+    },
+    {
+      "scenario": "Suggested input stays separate from its hidden reference outcome",
+      "result": "pass"
+    },
+    {
+      "scenario": "Blank prediction blocks reference reveal with an actionable message",
+      "result": "pass"
+    },
+    {
+      "scenario": "Entered prediction and revealed reference remain visibly distinct",
+      "result": "pass"
+    },
+    {
+      "scenario": "Copying and saving a suggestion retains the learner prediction rather than the reference",
+      "result": "pass"
+    },
+    {
+      "scenario": "Saved bracket input receives the correct local reference result",
+      "result": "pass"
+    },
+    {
+      "scenario": "Smaller learner-observed failure is attached without replacing the original case",
+      "result": "pass"
+    },
+    {
+      "scenario": "Recall prompts reference an earlier failed assumption without revealing its saved lesson",
+      "result": "pass"
+    },
+    {
+      "scenario": "Complete reconstruction is latched and becomes read-only at reveal",
+      "result": "pass"
+    },
+    {
+      "scenario": "Failure lesson appears only after recall reveal",
+      "result": "pass"
+    },
+    {
+      "scenario": "Acknowledging help after reveal changes good/easy intervals to one day",
+      "result": "pass"
+    },
+    {
+      "scenario": "Rating records an assisted review, clears the next attempt, and displays the due date",
+      "result": "pass"
+    },
+    {
+      "scenario": "Review queue separates due, upcoming, and unscheduled records with self-rated totals",
+      "result": "pass"
+    },
+    {
+      "scenario": "Review history and unchanged original approach persist after reload and navigation",
+      "result": "pass"
+    }
+  ],
+  "liveContextExtraction": {
+    "result": "core flows passed; final guard changes await native recheck",
+    "report": "2026-11-01-live-extraction.json"
+  },
+  "limitations": [
+    "Local HTTP preview failed with listen EPERM on 127.0.0.1:5173.",
+    "No whole-browser restart, cross-version, screen-reader, or retention efficacy validation.",
+    "Existing labeled QA records were reused; original notes were preserved. Related navigation added a Subsets record.",
+    "One locator became stale after a rating rerender; the current accessibility tree was reacquired and the saved result verified."
+  ]
+}

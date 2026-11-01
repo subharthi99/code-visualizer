@@ -14,7 +14,7 @@ for (const name of ['manifest.json','background.js','extract.js']) await cp(path
 // A standalone preview also works from disk when a local server is unavailable.
 // Source remains native modules; this small fixed-order bundle has no runtime eval.
 let bundled = '';
-for (const file of ['content.js','visual.js','visual-ui.js','domain.js','context.js','lessons.js','persistence.js','app.js']) {
+for (const file of ['content.js','visual.js','visual-ui.js','domain.js','context.js','lessons.js','patterns.js','challenges.js','recall.js','persistence.js','app.js']) {
   bundled += (await readFile(path.join(root,'src',file),'utf8')).replace(/^import .*;\n/gm,'').replace(/^export /gm,'') + '\n';
 }
 const css = (await readFile(path.join(root,'src/theme.css'),'utf8')) + (await readFile(path.join(root,'src/styles.css'),'utf8')).replace(/^@import .*;\n/,'');

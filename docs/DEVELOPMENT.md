@@ -6,6 +6,9 @@ The app uses native JavaScript modules and CSS, with no runtime or development d
 
 - `src/content.js`: three original exercises, hints, reference walkthroughs, and category prompts.
 - `src/context.js`: capture normalization, selective context application, and source checks.
+- `src/patterns.js`: curated pattern signals, failed assumptions, and related-question comparisons.
+- `src/challenges.js`: bounded local references, authored challenges, and learner-observed reductions.
+- `src/recall.js`: reconstruction prompts, review grouping, self-rated summaries, and history-based intervals.
 - `src/lessons.js`: eleven URL-matched authored lessons and attempt/focus checkpoints.
 - `src/visual.js`, `src/visual-ui.js`: immutable diagram editing, graph validation, snapshot diffs, and accessible visual rendering.
 - `src/domain.js`: problem identity, algorithm revisions, dry-run state transitions, case validators, review policy, and import validation.
@@ -37,7 +40,11 @@ Authored cases use explicit contracts. Tree input uses compact breadth-first JSO
 
 Algorithm edits create a revision when a batch is autosaved or the editor loses focus. Saved snapshots retain their original revision and are labeled when outdated. Snapshots copy variables and frames; changing a later draft cannot mutate earlier states. The visual editor supports arrays and named pointers (including one-past-end), editable binary trees, and shared objects referenced by stable IDs. Diagrams are optional on old snapshots and are preserved in version-1 backups. Tree validation rejects cycles, dangling children, multiple parents, and disconnected nodes. Variable, pointer, object, tree, and call-state changes are shown against the preceding snapshot. This is manual state modeling, not automatic heap tracing. Active frame locals can be edited independently of suspended callers.
 
-Recorded review attempts are stored with a rating and an assistance flag. The flag currently detects reveal without a written reconstruction; it cannot determine whether a learner relied on other hints. Review policy `fixed-v1` schedules again/hard/good/easy at 1/1/3/7 local-calendar days. It makes no mastery or retention guarantee.
+New reviews use `recall-v2`: approach, transition, and fresh-case evidence are latched at reveal. Missing evidence or declared help schedules a one-day retry. Help acknowledged after reveal is latched for that attempt. Complete unassisted good/easy ratings grow the prior interval (good: at least 3 days, double up to 60; easy: at least 7, triple up to 90). Again resets to 1; hard halves the prior interval with a 1–7 day bound. Previous failed/assisted attempts restart growth. Legacy `fixed-v1` events remain unchanged, with their 1/1/3/7-day defaults used when an interval was not stored. Dates advance by local calendar days. This is a transparent self-rating heuristic, not an evaluated memory model or correctness grader.
+
+The Patterns tab compares curated contracts for eleven exact linked identities and the corresponding guided exercises. Unsupported questions receive a manual comparison prompt; no title-based inference is performed. Pattern notes survive version-1 JSON transfers without changing older records.
+
+Edge-case suggestions now require a prediction before revealing the reference. A suggested case retains that prediction when copied into the case form. In addition to the guided exercises, `challenges.js` supports three bounded linked contracts: bracket strings (1–200 characters), strictly increasing integer arrays (1–200 values within ±9999), and printable-ASCII substring inputs (0–200 characters). These are small-input practice limits displayed in the UI, not comprehensive LeetCode validators. Search uses a linear oracle; substring uses exhaustive small-window enumeration. Other linked questions remain learner-checked. Counterexample history records manual observed/expected mismatches and a lesson, preserving the original input. It neither runs learner code nor proves minimality; supported local inputs are validated before recording a reduction.
 
 ## Chrome extension
 
@@ -68,8 +75,12 @@ For future releases, repeat the checks below. The current run covers core flows,
 
 ## Still planned
 
-Live code execution, automatic checking of learner pseudocode, adaptive scheduling, arbitrary-problem AI tutoring, richer editable tree diagrams, Notion API integration, and automatic cross-device synchronization. The current app supports a useful pre-code loop but does not fulfill every future requirement in the PRD.
+Live code execution, automatic checking of learner pseudocode, a validated memory model, arbitrary-problem AI tutoring, more diagram types, Notion API integration, and automatic cross-device synchronization. The current app supports a useful pre-code loop but does not fulfill every future requirement in the PRD.
 
 ## v0.2 verification
 
-See [release evidence](RELEASE_0_2.md) and [v0.2 browser checks](browser-testing/0.2.0.json). The v0.1 installed-extension run is historical; the newly added scripting permission requires approval before v0.2 live extraction can be checked.
+See [release evidence](RELEASE_0_2.md) and [v0.2 browser checks](browser-testing/0.2.0.json). The v0.1 installed-extension run is historical. A subsequent authorized v0.3 run verified core live extraction; see the November 1 evidence below.
+
+## v0.3 verification
+
+See [release evidence](RELEASE_0_3.md) and [browser checks](browser-testing/0.3.0.json). The standalone app was exercised in native Chrome. Authorized live extraction passed for Two Sum and Valid Parentheses on November 1, including formatted bounds and preservation of saved notes. A superscript-flattening defect was repaired test-first and rechecked live. Final clearer error handling and a post-extraction tab-identity check pass automated tests; native rechecking was blocked by a stale browser-automation menu. See [live evidence](browser-testing/2026-11-01-live-extraction.json). Text capture does not reproduce diagrams or arbitrary mathematical rendering; previews remain editable.

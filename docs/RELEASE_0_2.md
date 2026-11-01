@@ -30,3 +30,7 @@ Eleven CUA-driven Chrome assertions passed for authored lesson selection, editab
 The v0.2 build requests `activeTab`, `sidePanel`, and the newly added `scripting` permission. It still requests no persistent host access. The user must explicitly request an import; extraction reads only the rendered problem description and sends no content to an external service.
 
 The previously installed v0.1 extension passed live LeetCode tests. Reloading v0.2 with its new permission and testing live description extraction is pending the installation-time approval requested in this conversation. The source and packaged extension are ready; this document does not claim that new extraction path has been live-verified.
+
+## November 1 follow-up
+
+Reload was explicitly approved. The v0.3 build passed core live description extraction checks on Two Sum and Valid Parentheses. See [live evidence](browser-testing/2026-11-01-live-extraction.json) for a test-first formatting fix and the remaining native recheck limitation on final background-handler changes. The pending-approval wording above records the original v0.2 validation state.

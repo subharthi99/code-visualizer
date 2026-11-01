@@ -3,18 +3,23 @@ import { uid, clone, makeRecord, canonicalLeetCode, saveAlgorithm, addSnapshot, 
 import { emptyVisual, setVisualArray, putPointer, putTreeNode, putObject, putReference, stateChanges, visualChanges } from './visual.js';
 import { renderVisualEditor, renderVisualView, renderChangeList } from './visual-ui.js';
 import { lookupLesson, attemptCheckpoint } from './lessons.js';
+import { patternConnections } from './patterns.js';
+import { caseSupport, challengeCases, referenceFor, saveCounterexample } from './challenges.js';
+import { recallPrompts, recallInterval, recordRecall, reviewOverview } from './recall.js';
 import { normalizeContext, applyContext } from './context.js';
 import { openDatabase, readRecords, writeRecords } from './persistence.js';
 
 const root = document.querySelector('#app');
 const modal = document.querySelector('#modal');
-const tabs = ['Understand', 'Algorithm', 'Edge cases', 'Dry run', 'Recall'];
+const tabs = ['Understand', 'Algorithm', 'Edge cases', 'Dry run', 'Patterns', 'Recall'];
 let records = [], activeId = '', tab = 'Understand', view = 'workspace', filter = '';
 let frameDraft = [], cursor = -1, caseIndex = 0, caseLevel = 0, recallRevealed = false;
 let dirty = false, saveTimer, noticeTimer, saving = Promise.resolve(), importPreview;
 let renderedKey = '';
 let sourceTabId = null;
 let hintFocus = 'approach';
+let challengePrediction = '';
+let recallEvidence = null;
 let visualDraft = emptyVisual();
 const formDrafts = new Map();
 const savedVersions = new Map();
@@ -66,7 +71,7 @@ function field(label, key, placeholder = '', rows = 3) {
   return `<label class="field"><span>${label}</span><textarea data-field="${key}" rows="${rows}" placeholder="${e(placeholder)}">${e(current()[key])}</textarea></label>`;
 }
 
-function resetSession() { visualDraft = emptyVisual(); hintFocus = 'approach'; frameDraft = []; cursor = -1; caseIndex = 0; caseLevel = 0; recallRevealed = false; }
+function resetSession() { recallEvidence = null; challengePrediction = ''; visualDraft = emptyVisual(); hintFocus = 'approach'; frameDraft = []; cursor = -1; caseIndex = 0; caseLevel = 0; recallRevealed = false; }
 
 async function selectRecord(id) {
   await persist();
@@ -117,11 +122,16 @@ function render() {
     </div>
   </div>`;
   for (const [id, values] of Object.entries(formDrafts.get(nextKey) || {})) {
+    if (id === 'recall-form' && recallRevealed) continue;
     const form = document.getElementById(id);
     if (!form) continue;
     for (const [name,value] of Object.entries(values)) {
       if (name === '_provenance') form.dataset.provenance = value;
-      else if (form.elements.namedItem(name)) form.elements.namedItem(name).value = value;
+      else if (form.elements.namedItem(name)) {
+        const control = form.elements.namedItem(name);
+        if (control.type === 'checkbox') control.checked = true;
+        else control.value = value;
+      }
     }
   }
   renderedKey = nextKey;
@@ -145,7 +155,13 @@ function workspace() {
   const r = current(), x = exercise();
   return `<div class="workspace-heading"><div class="eyebrow">${x ? e(x.category) : 'YOUR THINKING WORKSPACE'}</div><div class="title-row"><h1>${e(r.title)}</h1>${badge(r.status)}</div><p>${x ? e(x.prompt) : 'Start with what you know. Turn it into an approach you can explain.'}</p><div class="source-row">${r.url ? `<a href="${e(r.url)}" target="_blank" rel="noopener noreferrer">Open on LeetCode ↗</a>` : '<span>Original practice exercise</span>'}<span>Algorithm revision ${r.revision}</span></div></div>
     <div class="tabbar" role="tablist" aria-label="Learning steps">${tabs.map((t,i) => `<button id="tab-${i}" role="tab" aria-selected="${tab === t}" tabindex="${tab === t ? 0 : -1}" aria-controls="workspace-panel" data-action="tab" data-tab="${t}"><span>0${i+1}</span>${t}</button>`).join('')}</div>
-    <section id="workspace-panel" role="tabpanel" aria-labelledby="tab-${tabs.indexOf(tab)}" tabindex="0">${({ Understand: understand, Algorithm: algorithm, 'Edge cases': edgeCases, 'Dry run': dryRun, Recall: recall })[tab]()}</section>`;
+    <section id="workspace-panel" role="tabpanel" aria-labelledby="tab-${tabs.indexOf(tab)}" tabindex="0">${({ Understand: understand, Algorithm: algorithm, 'Edge cases': edgeCases, 'Dry run': dryRun, Patterns: patterns, Recall: recall })[tab]()}</section>`;
+}
+
+function patterns() {
+  const connection = patternConnections(current());
+  if (!connection) return `<article class="panel"><h2>Find a pattern from the contract</h2><p>No curated connections for this question yet. Compare what one step remembers, the invariant, and what a call returns with a problem you know. Similar wording alone does not establish the same approach.</p>${field('Your pattern comparison', 'patternNote', 'Which known question is similar? What condition changes the approach?')}</article>`;
+  return `<div class="stack"><article class="panel"><div class="eyebrow">CONNECT THE REASONING</div><h2>${e(connection.family)}</h2><p><strong>When to consider it:</strong> ${e(connection.signal)}</p><p><strong>The promise:</strong> ${e(connection.invariant)}</p><h3>When this approach fails</h3><p>${e(connection.trap)}</p>${field('Your pattern comparison', 'patternNote', 'Explain the shared idea and the difference in your own words.')}</article><article class="panel"><h2>Related questions, different contracts</h2><p>Curated comparisons across the supported lessons. Opening one adds a workspace or reopens its saved notes.</p>${connection.related.map(item => `<article class="case-card"><h3>${e(item.title)}</h3>${badge(item.family)}<p>${e(item.difference)}</p><p class="muted">${e(item.contrast)}</p>${button('Explore this question →','related-problem',`data-url="${e(item.url)}"`,'secondary')}</article>`).join('')}</article></div>`;
 }
 
 function understand() {
@@ -168,11 +184,15 @@ function algorithm() {
 }
 
 function edgeCases() {
-  const r = current(), x = exercise(), candidate = x?.cases[caseIndex % x.cases.length];
+  const r = current(), x = exercise(), support = caseSupport(r), candidates = challengeCases(r), candidate = candidates[caseIndex % candidates.length];
   const prompt = candidate || { category: genericCases[caseIndex % genericCases.length][0], prompt: genericCases[caseIndex % genericCases.length][1] };
-  return `<div class="workspace-columns"><div class="stack"><article class="panel"><div class="eyebrow">TRY TO BREAK YOUR IDEA</div><h2>What would your algorithm miss?</h2><p>Small, deliberate inputs teach more than a pile of random tests. Name the assumption each case challenges.</p><form id="case-form"><div class="field-pair"><label class="field"><span>Case category</span><input name="category" required placeholder="For example: smallest valid input"></label><label class="field"><span>Expected result or property</span><input name="expected" required placeholder="Predict before checking"></label></div><label class="field"><span>Input ${x ? '(JSON)' : ''}</span><textarea name="input" rows="3" required placeholder="${x?.id === 'pair-sum' ? '{&quot;nums&quot;:[3,3],&quot;target&quot;:6}' : 'Write a small input…'}"></textarea></label><label class="field"><span>Why this case? What assumption does it challenge?</span><textarea name="why" rows="2" required placeholder="My approach assumes… This input tests whether…"></textarea></label><div class="panel-actions"><span class="muted small">${x ? 'Reference checks are available after you make a prediction.' : 'Learner-checked. Add constraints before judging a case valid.'}</span><button class="primary" type="submit">Save this case ＋</button></div></form></article>
-    <article class="panel"><div class="section-heading"><h2>Your case collection</h2>${badge(`${r.cases.length} cases`)}</div>${r.cases.length ? r.cases.map(c => `<article class="case-card"><div class="section-heading"><strong>${e(c.category)}</strong>${badge(c.reference ? 'Reference checked' : 'Your prediction')}</div><pre>${e(c.input)}</pre><p><strong>Predicted:</strong> ${e(c.expected)}</p><p class="muted">${e(c.why)}</p>${c.reference ? `<p class="reference-result"><strong>Reference:</strong> ${e(c.reference)}</p>` : ''}<div class="inline-actions">${x ? button('Check input & reveal reference', 'check-case', `data-id="${e(c.id)}"`, 'quiet') : ''}${button('Dry-run this case →', 'run-case', `data-id="${e(c.id)}"`, 'quiet')}<small>Revision ${c.revision}${c.revision !== r.revision ? ' · earlier algorithm' : ''}</small></div></article>`).join('') : empty('A small test can change your thinking.', 'Add your own case, or use a category prompt to get started.')}</article></div>
-    <aside class="stack"><article class="panel discovery"><div class="eyebrow">DISCOVER AN EDGE CASE</div><h2>${e(prompt.category)}</h2><p>${e(prompt.prompt)}</p>${candidate && caseLevel > 0 ? `<div class="example-block"><span>TRY THIS INPUT</span><pre>${e(candidate.input)}</pre><p>${e(candidate.why)}</p></div>` : ''}${candidate && caseLevel > 1 ? `<p class="reference-result"><strong>Reference outcome:</strong> ${e(candidate.expected)}</p>` : ''}<div class="stack-buttons">${candidate && caseLevel === 0 ? button('Suggest a concrete input', 'suggest-case', '', 'secondary') : ''}${candidate && caseLevel === 1 ? button('Reveal expected outcome', 'reveal-case', '', 'secondary') : ''}${candidate && caseLevel > 0 ? button('Use this input in my case', 'use-case', '', 'quiet') : ''}${button('Try another category ↻', 'next-case', '', 'text-button')}</div><p class="muted small">${candidate ? 'Authored cases respect this exercise’s constraints.' : 'Category prompts are general. A URL alone does not tell us which cases are valid.'}</p></article><article class="panel tint"><h3>Find the smallest failure</h3><p>When a case breaks your approach, remove one element or branch. Does it still fail? Keep simplifying, then record what you assumed and what changed.</p></article></aside></div>`;
+  return `<div class="workspace-columns"><div class="stack"><article class="panel"><div class="eyebrow">TRY TO BREAK YOUR IDEA</div><h2>What would your algorithm miss?</h2><p>Small, deliberate inputs teach more than a pile of random tests. Name the assumption each case challenges.</p><form id="case-form"><div class="field-pair"><label class="field"><span>Case category</span><input name="category" required placeholder="For example: smallest valid input"></label><label class="field"><span>Expected result or property</span><input name="expected" required placeholder="Predict before checking"></label></div><label class="field"><span>Input ${support ? '(JSON)' : ''}</span><textarea name="input" rows="3" required placeholder="${x?.id === 'pair-sum' ? '{&quot;nums&quot;:[3,3],&quot;target&quot;:6}' : 'Write a small input…'}"></textarea></label><label class="field"><span>Why this case? What assumption does it challenge?</span><textarea name="why" rows="2" required placeholder="My approach assumes… This input tests whether…"></textarea></label><div class="panel-actions"><span class="muted small">${support ? 'Reference checks are available after you make a prediction.' : 'Learner-checked. Add constraints before judging a case valid.'}</span><button class="primary" type="submit">Save this case ＋</button></div></form></article>
+    <article class="panel"><div class="section-heading"><h2>Your case collection</h2>${badge(`${r.cases.length} cases`)}</div>${r.cases.length ? r.cases.map(c => `<article class="case-card"><div class="section-heading"><strong>${e(c.category)}</strong>${badge(c.reference ? 'Reference checked' : 'Your prediction')}</div><pre>${e(c.input)}</pre><p><strong>Predicted:</strong> ${e(c.expected)}</p><p class="muted">${e(c.why)}</p>${c.reference ? `<p class="reference-result"><strong>Reference:</strong> ${e(c.reference)}</p>` : ''}<div class="inline-actions">${support ? button('Check input & reveal reference', 'check-case', `data-id="${e(c.id)}"`, 'quiet') : ''}${button('Dry-run this case →', 'run-case', `data-id="${e(c.id)}"`, 'quiet')}<small>Revision ${c.revision}${c.revision !== r.revision ? ' · earlier algorithm' : ''}</small></div>${(c.reductions || []).map(d => `<div class="example-block"><strong>Smaller failure · learner-observed</strong><pre>${e(d.input)}</pre><p>Observed: ${e(d.actual)} · Expected: ${e(d.expected)}</p><p>${e(d.lesson)}</p></div>`).join('')}</article>`).join('') : empty('A small test can change your thinking.', 'Add your own case, or use a category prompt to get started.')}</article></div>
+    <aside class="stack"><article class="panel discovery"><div class="eyebrow">DISCOVER AN EDGE CASE</div><h2>${e(prompt.category)}</h2><p>${e(prompt.prompt)}</p>${support ? `<p class="muted small">Local check contract: ${e(support)}</p>` : ''}${candidate && caseLevel > 0 ? `<div class="example-block"><span>TRY THIS INPUT</span><pre>${e(candidate.input)}</pre><p>${e(candidate.why)}</p></div>` : ''}${candidate && caseLevel === 1 ? '<label class="field"><span>Your prediction before reveal</span><input id="challenge-prediction" placeholder="Predict the output or property"></label>' : ''}${candidate && caseLevel > 1 ? `<p>Your prediction: ${e(challengePrediction)}</p><p class="reference-result"><strong>Reference outcome:</strong> ${e(candidate.expected)}</p>` : ''}<div class="stack-buttons">${candidate && caseLevel === 0 ? button('Suggest a concrete input', 'suggest-case', '', 'secondary') : ''}${candidate && caseLevel === 1 ? button('Reveal expected outcome', 'reveal-case', '', 'secondary') : ''}${candidate && caseLevel > 0 ? button('Use this input in my case', 'use-case', '', 'quiet') : ''}${button('Try another category ↻', 'next-case', '', 'text-button')}</div><p class="muted small">${candidate ? 'Authored cases follow the displayed local check contract.' : 'Category prompts are general. A URL alone does not tell us which cases are valid.'}</p></article>${counterexamplePanel(r)}</aside></div>`;
+}
+
+function counterexamplePanel(r) {
+  return `<article class="panel tint"><h3>Find the smallest failure</h3><p>Remove one element or branch and dry-run again. Keep the change only if the input is valid and still exposes the same failure. This records your observation; it does not execute your algorithm or prove minimality.</p>${r.cases.length ? `<form id="counterexample-form"><label class="field"><span>Original case</span><select name="caseId">${r.cases.map(c => `<option value="${e(c.id)}">${e(c.category)} · ${e(c.input.slice(0,50))}</option>`).join('')}</select></label>${[['input','Smaller input'],['actual','Observed result from your dry run'],['expected','Expected result'],['lesson','What assumption failed?']].map(([name,label]) => `<label class="field"><span>${label}</span><textarea name="${name}" rows="2" maxlength="10000" required></textarea></label>`).join('')}<button class="secondary" type="submit">Save smaller failure</button></form>` : '<p>Save a case first to attach a smaller failure.</p>'}</article>`;
 }
 
 function dryRun() {
@@ -214,15 +234,17 @@ function renderArray(value) {
 }
 
 function recall() {
-  const r = current(), x = lookupLesson(r);
-  return `<div class="workspace-columns"><div class="stack"><article class="panel"><div class="eyebrow">MAKE THE REASONING STICK</div><h2>Leave a cue for your future self.</h2><p>Remember why the approach works, not just what the code looked like.</p>${field('Your memory cue', 'cue', 'A short question that brings back the key idea.')}${field('The mistake that taught you something', 'mistake', 'What I assumed → why it failed → what I changed.')}<div class="panel-actions"><span class="muted small">Fixed prototype schedule: 1, 1, 3, or 7 days.</span>${button('Schedule a review for tomorrow', 'schedule', '', 'primary')}</div></article>
-    <article class="panel recall-card"><div class="eyebrow">A QUICK RECONSTRUCTION</div><h2>Can you recover the approach?</h2><p>${e(r.cue || 'Explain your approach, dry-run one transition, and invent a fresh edge case. Why would that case catch a mistake?')}</p><label class="field"><span>Try from memory before revealing</span><textarea id="recall-attempt" rows="5" placeholder="Reconstruct your algorithm and explain a tricky step…"></textarea></label>${!recallRevealed ? button('Reveal my saved reasoning', 'reveal-recall', '', 'secondary') : `<div class="recall-answer"><h3>Your saved approach</h3><pre>${e(r.algorithm || r.approach || 'No approach saved yet.')}</pre><p><strong>Invariant:</strong> ${e(r.invariant || 'Not recorded yet.')}</p><p><strong>Mistake:</strong> ${e(r.mistake || 'Not recorded yet.')}</p></div><p>How much could you explain independently?</p><div class="rating-buttons">${['again','hard','good','easy'].map((rating,i) => button(`${rating[0].toUpperCase()+rating.slice(1)}<small>${[1,1,3,7][i]} day${i > 1 ? 's' : ''}</small>`, 'rate', `data-rating="${rating}"`, 'secondary')).join('')}</div>`}</article></div>
-    <aside class="stack">${x ? `<article class="panel"><details><summary>Reveal pattern & a useful comparison</summary><h3>${e(x.pattern)}</h3><p>${e(x.invariant)}</p><div class="rule"></div><p>${e(x.contrast)}</p></details><details class="solution-details"><summary>Reveal full approach explanation</summary><p>${e(x.solution)}</p></details></article>` : ''}<article class="panel tint"><h3>What counts as remembering?</h3><p>Can you explain the invariant, reconstruct a step, and apply it to a new input? Recognizing an answer after reveal is different from recalling it.</p><p class="muted small">Review ratings are self-assessments. They do not establish mastery.</p></article><article class="panel"><h3>Review history</h3><p>${r.due ? `Next review: ${e(new Date(r.due).toLocaleDateString())}` : 'Not scheduled yet.'}</p>${r.reviews.slice(-5).reverse().map(rev => `<p class="small">${e(new Date(rev.at).toLocaleDateString())} · ${e(rev.rating)}${rev.assisted ? ' · revealed without an attempt' : ''}</p>`).join('')}</article></aside></div>`;
+  const r = current(), x = lookupLesson(r), prompts = recallPrompts(r);
+  const assisted = !recallEvidence || recallEvidence.usedHelp || ['attempt','transition','edgeCase'].some(key => !recallEvidence[key]);
+  return `<div class="workspace-columns"><div class="stack"><article class="panel recall-card"><div class="eyebrow">A QUICK RECONSTRUCTION</div><h2>Can you recover the approach?</h2><p>${e(r.cue || 'Explain the approach from memory before opening your saved reasoning.')}</p><form id="recall-form">${[['attempt','recall-attempt','Try from memory before revealing'],['transition','recall-transition','Trace one transition'],['edgeCase','recall-edge-case','Invent a fresh edge case']].map(([key,id,label],i) => `<label class="field"><span>${label}</span><small>${e(prompts[i])}</small><textarea id="${id}" name="${key}" rows="3" maxlength="10000" ${recallRevealed ? 'readonly' : ''}>${e(recallEvidence?.[key] || '')}</textarea></label>`).join('')}<label class="check-field"><input id="recall-help" name="usedHelp" type="checkbox" ${recallEvidence?.usedHelp ? 'checked' : ''}>I needed hints or saved reasoning to reconstruct this attempt.</label></form>${!recallRevealed ? button('Reveal my saved reasoning', 'reveal-recall', '', 'secondary') : `<div class="recall-answer"><h3>Your saved approach</h3><pre>${e(r.algorithm || r.approach || 'No approach saved yet.')}</pre><p><strong>Invariant:</strong> ${e(r.invariant || 'Not recorded yet.')}</p><p><strong>Mistake:</strong> ${e(r.mistake || 'Not recorded yet.')}</p>${r.cases.flatMap(c => c.reductions || []).slice(-3).map(d => `<p><strong>Failure lesson:</strong> ${e(d.lesson)}</p>`).join('')}</div><p>How much could you explain independently? Missing reconstruction fields or using help schedules a retry in one day.</p><div class="rating-buttons">${['again','hard','good','easy'].map(rating => { const days = recallInterval(r,rating,assisted); return button(`${rating[0].toUpperCase()+rating.slice(1)}<small>${days} day${days === 1 ? '' : 's'}</small>`, 'rate', `data-rating="${rating}"`, 'secondary'); }).join('')}</div>`}</article>
+    <article class="panel"><div class="eyebrow">MAKE THE REASONING STICK</div><h2>Leave a cue for your future self.</h2>${field('Your memory cue', 'cue', 'A question that brings back the key idea.')}${recallRevealed ? field('The mistake that taught you something', 'mistake', 'What I assumed → why it failed → what I changed.') : '<p>Your saved mistake stays hidden until you reveal the answer.</p>'}<div class="panel-actions"><span class="muted small">Intervals grow with independent self-rated recall; assisted attempts retry tomorrow.</span>${button('Schedule a review for tomorrow', 'schedule', '', 'primary')}</div></article></div>
+    <aside class="stack">${x && recallRevealed ? `<article class="panel"><h3>${e(x.pattern)}</h3><p>${e(x.invariant)}</p><p>${e(x.contrast)}</p><details><summary>Full approach explanation</summary><p>${e(x.solution)}</p></details></article>` : ''}<article class="panel tint"><h3>What counts as remembering?</h3><p>Recover the invariant, reconstruct a transition, and predict a fresh case. Evidence is captured when you reveal; copying afterward does not replace it.</p><p class="muted small">Review ratings and help use are self-reported. The transparent review schedule does not grade correctness or establish mastery. Checking help after reveal changes all intervals to one day.</p></article><article class="panel"><h3>Review history</h3><p>${r.due ? `Next review: ${e(new Date(r.due).toLocaleDateString())}` : 'Not scheduled yet.'}</p>${r.reviews.slice(-10).reverse().map(rev => `<article class="revision"><p class="small">${e(new Date(rev.at).toLocaleDateString())} · ${e(rev.rating)}${rev.assisted ? ' · assisted / incomplete' : ''}${rev.intervalDays ? ` · ${e(rev.intervalDays)} day${rev.intervalDays === 1 ? '' : 's'}` : ' · legacy schedule'}</p>${recallRevealed ? `<details><summary>Earlier reconstruction</summary><p>${e(rev.attempt || 'No reconstruction recorded.')}</p><p>${e(rev.transition || '')}</p><p>${e(rev.edgeCase || '')}</p></details>` : ''}</article>`).join('')}</article></aside></div>`;
 }
 
 function reviewQueue() {
-  const scheduled = records.filter(r => r.due).sort((a,b) => a.due.localeCompare(b.due));
-  return `<div class="welcome review-page"><div class="eyebrow">REVISIT, DON'T JUST REREAD</div><h1>A little recall.<br><em>A stronger connection.</em></h1><p class="lead">Reconstruct the approach before you reveal it.<br>Then try a new case that challenges the same assumption.</p><div class="section-heading"><h2>Your upcoming reviews</h2>${badge(`${scheduled.length} scheduled`)}</div>${scheduled.length ? scheduled.map(r => `<article class="review-row"><div><h3>${e(r.title)}</h3><p>${new Date(r.due) <= new Date() ? 'Due now' : `Due ${e(new Date(r.due).toLocaleDateString())}`} · ${r.reviews.length} past reviews</p></div>${button('Try from memory →', 'review-record', `data-id="${e(r.id)}"`, 'secondary')}</article>`).join('') : empty('Make a little room for review.', 'Open a problem’s Recall tab and schedule your first review.')}</div>`;
+  const overview = reviewOverview(records);
+  const rows = (items,scheduled) => items.map(r => `<article class="review-row"><div><h3>${e(r.title)}</h3><p>${scheduled ? `Due ${e(new Date(r.due).toLocaleDateString())}` : 'Not scheduled'} · ${r.reviews.length} past reviews${r.mistake || r.cases.some(c => c.reductions?.length) ? ' · revisit a failed assumption' : ''}</p></div>${button('Try from memory →', 'review-record', `data-id="${e(r.id)}"`, 'secondary')}</article>`).join('');
+  return `<div class="welcome review-page"><div class="eyebrow">REVISIT, DON'T JUST REREAD</div><h1>A little recall.<br><em>A stronger connection.</em></h1><p class="lead">Reconstruct the approach, trace a transition, and invent a fresh case.</p><article class="panel"><h2>Self-rated progress</h2><p>${overview.attempts} attempts · ${overview.independent} independent good/easy ratings · ${overview.needsWork} assisted or again/hard ratings</p><p class="muted small">These describe your ratings, not measured mastery.</p></article><h2>Due now · ${overview.due.length}</h2>${rows(overview.due,true) || '<p>No reviews due. Practice an unscheduled question or return when one is due.</p>'}<h2>Upcoming · ${overview.upcoming.length}</h2>${rows(overview.upcoming,true) || '<p>No upcoming reviews.</p>'}<h2>Not scheduled · ${overview.unscheduled.length}</h2>${rows(overview.unscheduled,false) || '<p>All questions have a review date.</p>'}</div>`;
 }
 
 function showModal(html) { modal.innerHTML = html; modal.showModal(); }
@@ -303,6 +325,13 @@ root.addEventListener('focusout', event => {
   }
 });
 
+root.addEventListener('change', event => {
+  if (event.target.id === 'recall-help' && recallRevealed && recallEvidence) {
+    recallEvidence.usedHelp ||= Boolean(event.target.checked);
+    render(); document.querySelector('#recall-help').focus();
+  }
+});
+
 document.addEventListener('click', async event => {
   const el = event.target.closest('[data-action]');
   if (!el) return;
@@ -315,6 +344,7 @@ document.addEventListener('click', async event => {
     if (action === 'close-modal') modal.close();
     if (action === 'exercise') await openRecord(makeRecord({ exerciseId: el.dataset.id }));
     if (action === 'select') await selectRecord(el.dataset.id);
+    if (action === 'related-problem') await openRecord(makeRecord({ url:el.dataset.url }));
     if (action === 'reviews') { await persist(); view = 'reviews'; render(); }
     if (action === 'tab' || action === 'next') {
       await persist(); tab = el.dataset.tab; cursor = current().snapshots.length - 1; restoreSnapshotDraft(); render();
@@ -323,15 +353,19 @@ document.addEventListener('click', async event => {
     if (action === 'hint-focus') { if (['approach','recursion','implementation'].includes(el.dataset.focus)) hintFocus = el.dataset.focus; render(); }
     if (action === 'hint') { current().hintHistory.push({ focus:hintFocus,revision:current().revision,level: current().hintCount + 1, at: new Date().toISOString() }); current().hintCount = Math.min(5, current().hintCount + 1); markDirty(); await persist(); render(); }
     if (action === 'suggest-case') { caseLevel = 1; render(); }
-    if (action === 'reveal-case') { caseLevel = 2; render(); }
-    if (action === 'next-case') { caseIndex++; caseLevel = 0; render(); }
+    if (action === 'reveal-case') {
+      const prediction = document.querySelector('#challenge-prediction').value?.trim();
+      if (!prediction) throw new Error('Predict an outcome before revealing the reference.');
+      challengePrediction = prediction; caseLevel = 2; render();
+    }
+    if (action === 'next-case') { caseIndex++; caseLevel = 0; challengePrediction = ''; render(); }
     if (action === 'use-case') {
-      const c = exercise().cases[caseIndex % exercise().cases.length], form = document.querySelector('#case-form');
+      const candidates = challengeCases(current()), c = candidates[caseIndex % candidates.length], form = document.querySelector('#case-form');
       form.elements.category.value = c.category; form.elements.input.value = c.input; form.elements.why.value = c.why;
-      if (caseLevel > 1) form.elements.expected.value = c.expected;
+      if (challengePrediction) form.elements.expected.value = challengePrediction;
       form.elements.expected.focus(); form.dataset.provenance = 'authored-suggestion';
     }
-    if (action === 'check-case') { const c = current().cases.find(c => c.id === el.dataset.id); c.reference = checkCase(current().exerciseId, c.input); markDirty(); await persist(); render(); }
+    if (action === 'check-case') { const c = current().cases.find(c => c.id === el.dataset.id); c.reference = referenceFor(current(), c.input); markDirty(); await persist(); render(); }
     if (action === 'run-case') {
       const c = current().cases.find(c => c.id === el.dataset.id);
       await persist(); tab = 'Dry run'; cursor = -1; frameDraft = []; visualDraft = emptyVisual(); render(); document.querySelector('#snapshot-form').elements.input.value = c.input;
@@ -358,17 +392,24 @@ document.addEventListener('click', async event => {
       cursor = Math.max(0, Math.min(cursor, current().snapshots.length-1)); restoreSnapshotDraft(); render();
     }
     if (action === 'clear-draft') { cursor = -1; frameDraft = []; visualDraft = emptyVisual(); formDrafts.delete(`${activeId}:${view}:${tab}:-1`); renderedKey = ''; render(); }
-    if (action === 'schedule') { current().due = new Date(Date.now()+86_400_000).toISOString(); current().status = 'Practiced'; markDirty(); await persist(); notify('Review scheduled for tomorrow.'); render(); }
+    if (action === 'schedule') { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1); current().due = tomorrow.toISOString(); current().status = 'Practiced'; markDirty(); await persist(); notify('Review scheduled for tomorrow.'); render(); }
     if (action === 'review-record') { await selectRecord(el.dataset.id); tab = 'Recall'; render(); }
     if (action === 'reveal-recall') {
-      const attempt = document.querySelector('#recall-attempt').value;
-      recallRevealed = true; render(); document.querySelector('#recall-attempt').value = attempt;
+      if (recallRevealed) return;
+      recallEvidence = {
+        attempt:document.querySelector('#recall-attempt').value?.trim() || '',
+        transition:document.querySelector('#recall-transition').value?.trim() || '',
+        edgeCase:document.querySelector('#recall-edge-case').value?.trim() || '',
+        usedHelp:Boolean(document.querySelector('#recall-help').checked)
+      };
+      recallRevealed = true; render(); document.querySelector('#recall-attempt').value = recallEvidence.attempt;
     }
     if (action === 'rate') {
-      const attempt = document.querySelector('#recall-attempt').value.trim();
-      const old = current(), next = reviewRecord(old, el.dataset.rating);
-      next.reviews.at(-1).assisted = !attempt; next.reviews.at(-1).attempt = attempt;
-      records[records.indexOf(old)] = next; markDirty(); await persist(); recallRevealed = false; notify('Review saved. Your next review is scheduled.'); render();
+      if (!recallRevealed || !recallEvidence) throw new Error('Reconstruct and reveal before rating this review.');
+      const old = current(), next = recordRecall(old,el.dataset.rating,{ ...recallEvidence,usedHelp:recallEvidence.usedHelp || Boolean(document.querySelector('#recall-help').checked) });
+      records[records.indexOf(old)] = next; markDirty(); await persist(); recallRevealed = false; recallEvidence = null;
+      formDrafts.delete(`${activeId}:${view}:${tab}:${cursor}`); renderedKey = '';
+      notify('Review saved. Your next review is scheduled.'); render();
     }
     if (action === 'export') {
       try { await persist(); } catch { /* Export in-memory edits even if storage rejects a conflict. */ }
@@ -397,6 +438,10 @@ document.addEventListener('submit', async event => {
       if (current().cases.some(c => caseIdentity(c.input) === caseIdentity(data.input))) throw new Error('That input is already in your collection.');
       current().cases.push({ id:uid(), ...data, revision:current().revision, provenance:form.dataset.provenance || 'learner', at:new Date().toISOString() });
       markDirty(); await persist(); form.reset(); delete form.dataset.provenance; render(); notify('Case saved. Try your prediction before checking the reference.');
+    }
+    if (form.id === 'counterexample-form') {
+      const old = current(); records[records.indexOf(old)] = saveCounterexample(old,data.caseId,data);
+      markDirty(); await persist(); form.reset(); render(); notify('Smaller failure saved with the original case.');
     }
     if (form.id === 'snapshot-form') {
       if (data.diagram && !Array.isArray(JSON.parse(data.diagram))) throw new Error('An array sketch must be a JSON array.');

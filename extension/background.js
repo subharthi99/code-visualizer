@@ -32,10 +32,16 @@ chrome.runtime.onMessage?.addListener((message,sender,respond) => {
       if (sender.id !== chrome.runtime.id || !Number.isInteger(message.tabId)) throw new Error('Invalid context request.');
       const expected = canonicalLeetCode(message.url);
       const sourceTab = await chrome.tabs.get(message.tabId);
+      if (!sourceTab.url) throw new Error('Temporary page access is unavailable. Click the extension toolbar action on the source question again.');
       if (canonicalLeetCode(sourceTab.url).url !== expected.url) throw new Error('The source tab is now on a different question. Click Study this problem again.');
+      const path = new URL(sourceTab.url).pathname;
+      if (!/^\/problems\/[a-z0-9-]+\/(?:description\/?)?$/.test(path + (path.endsWith('/') ? '' : '/'))) throw new Error('Open the Description tab before importing context.');
       const result = await chrome.scripting.executeScript({ target:{ tabId:message.tabId },func:readLeetCodeContext });
+      if (!result[0]?.result) throw new Error('Could not read a rendered description. Open Description and try again, or paste the context manually.');
       const context = normalizeContext(result[0]?.result);
       if (context.url !== expected.url) throw new Error('The question changed during capture. Try again.');
+      const after = await chrome.tabs.get(message.tabId);
+      if (!after.url || canonicalLeetCode(after.url).url !== expected.url) throw new Error('The source question changed during capture. Click Study this problem again.');
       respond({ ok:true,context });
     } catch (error) { respond({ ok:false,error:error.message }); }
   })();

@@ -2,7 +2,7 @@
 
 A local-first workspace for reasoning through data structures and algorithms **before writing code**. Build an approach, challenge it with edge cases, dry-run it by hand, and revisit the reasoning later.
 
-**Status: working early alpha (v0.2.0).** Includes a browser app and a buildable Chrome companion extension. No accounts, external AI calls, runtime dependencies, or paid services are required.
+**Status: working early alpha (v0.3.0).** Includes a browser app and a buildable Chrome companion extension. No accounts, external AI calls, runtime dependencies, or paid services are required.
 
 ## Run locally
 
@@ -29,9 +29,10 @@ If a local server is unavailable, build and open `dist/web/standalone.html` in C
 - Restate the problem, record constraints, and write an initial approach.
 - Reveal progressive hints without immediately showing the solution. Eleven supported LeetCode questions receive authored five-level lessons and rule-based checkpoints tied to the saved attempt; unsupported questions receive general reasoning prompts.
 - Write algorithms/pseudocode with saved revisions.
-- Discover edge-case categories, request concrete inputs, predict outcomes, and check inputs against reference validators for the three guided exercises.
+- Discover edge-case categories and predict before revealing an outcome. Reference checks cover three guided exercises plus bounded local contracts for Valid Parentheses, Binary Search, and Longest Substring Without Repeating Characters. Save smaller learner-observed failures with the assumption they expose.
 - Build editable arrays with named pointers, binary trees with selectable nodes, and objects with shared references. Record diagrams alongside variables, recursive frames, and return values. Replay snapshots and inspect what changed.
-- Save memory cues and mistakes; reconstruct your reasoning and schedule a review.
+- Compare curated patterns and related questions across eleven lessons; record why a shared idea does or does not transfer.
+- Reconstruct your approach, trace a transition, and invent a fresh case before revealing saved reasoning. Review due, upcoming, and unscheduled questions; intervals respond to self-rated recall and declared help use.
 - Import a Notion-style CSV with column mapping and row-error preview, or transfer a versioned JSON backup. Existing problems are preserved.
 
 ## LeetCode extension
@@ -43,7 +44,7 @@ If a local server is unavailable, build and open `dist/web/standalone.html` in C
 5. In **Understand**, choose **Import / edit question context** while the source tab is on Description. Review the capture and apply only selected fields.
 6. Use the companion workspace beside the question. Click the toolbar action again to capture a different question.
 
-Supported problem subpages resolve to one canonical URL, so revisiting a question reopens its notes. The extension requests only `activeTab`, `sidePanel`, and `scripting`; it does not inspect cookies, collect submission history, or modify the LeetCode editor. The v0.1 extension passed 17 installed-extension assertions on Chrome 156; see [browser results](docs/browser-testing/2026-10-30.json). The v0.2 context-import path adds `scripting` for explicit, read-only extraction; permission approval and live extraction verification are pending. See [v0.2 scope and test evidence](docs/RELEASE_0_2.md). See [development notes](docs/DEVELOPMENT.md) for limitations and the repeatable validation checklist. The extension is not published to the Chrome Web Store.
+Supported problem subpages resolve to one canonical URL, so revisiting a question reopens its notes. The extension requests only `activeTab`, `sidePanel`, and `scripting`; it does not inspect cookies, collect submission history, or modify the LeetCode editor. The v0.1 extension passed 17 installed-extension assertions on Chrome 156; see [browser results](docs/browser-testing/2026-10-30.json). The context-import path uses `scripting` for explicit, read-only extraction. Authorized v0.3 live checks passed for Two Sum and Valid Parentheses, including selective application, formatted bounds, and wrong-question rejection. Final fallback-message and post-extraction guard changes pass automated tests; their native recheck was blocked by automation failure. See [live extraction evidence](docs/browser-testing/2026-11-01-live-extraction.json). See [v0.2 scope and test evidence](docs/RELEASE_0_2.md). See [development notes](docs/DEVELOPMENT.md) for limitations and the repeatable validation checklist. The extension is not published to the Chrome Web Store.
 
 ## Data and limitations
 
@@ -51,13 +52,14 @@ Data is saved in this browser's IndexedDB. Export backups; clearing site data or
 
 Dry runs are **learner-authored reasoning, not executed code**. Reference checks validate supported inputs and reveal expected outcomes; they do not execute or prove your algorithm correct. A LeetCode link alone does not supply its constraints: import or enter the specification. Authored lessons match exact supported question URLs; rule-based checkpoints are prompts, not algorithm correctness checks. Unsupported problems require self-checking.
 
-Review intervals are transparent prototype rules, not an adaptive memory model. Python tracing, arbitrary pseudocode execution, Notion API sync, and additional languages remain future work.
+Review intervals use transparent history-based prototype rules, not a validated memory model. Missing reconstruction evidence or declared help triggers a one-day retry; good/easy ratings on complete independent attempts grow intervals. Past history stays intact. Python tracing, arbitrary pseudocode execution, Notion API sync, and additional languages remain future work.
 
 ## Project documents
 
 - [Product requirements and implementation scope](docs/PRD.md)
 - [Market study](docs/MARKET_STUDY.md)
 - [Development, architecture, and validation](docs/DEVELOPMENT.md)
+- [v0.3 scope, TDD evidence, and remaining verification](docs/RELEASE_0_3.md)
 - [Test-first audit and coverage limits](docs/TDD_AUDIT.md)
 - [Contributing](CONTRIBUTING.md)
 - [Repository guidelines](AGENTS.md)

@@ -1,14 +1,16 @@
 # Code Visualizer — Product Requirements Document
 
-Status: early alpha implemented locally; full roadmap remains proposed. Version 0.6, October 30, 2026.
+Status: early alpha implemented locally; full roadmap remains proposed. Version 0.7, November 1, 2026.
 
 ## Implementation snapshot
 
 The first alpha includes a native-module browser workspace, three original guided exercises, staged hints, algorithm revisions, guided edge-case inputs and reference validators, manual call-stack/array snapshots, recall and fixed review scheduling, CSV mapping, JSON transfer, and a buildable Chrome capture/side-panel extension. See [development notes](DEVELOPMENT.md) for verification and limitations.
 
-The implementation uses dependency-free JavaScript instead of the provisional React/TypeScript stack. Local browser storage is implemented; no hosted service or account is required. Live code tracing, automatic free-form pseudocode evaluation, arbitrary-question tutoring, adaptive scheduling, and Notion API sync remain planned. Extension API tests use mocks; an additional native Chrome run passed 17 installed-extension assertions against live LeetCode pages, recorded in [browser results](browser-testing/2026-10-30.json). Requirements below remain the product targets, not a claim that every acceptance criterion has shipped.
+The implementation uses dependency-free JavaScript instead of the provisional React/TypeScript stack. Local browser storage is implemented; no hosted service or account is required. Live code tracing, automatic free-form pseudocode evaluation, arbitrary-question tutoring, validated adaptive scheduling, and Notion API sync remain planned. Extension API tests use mocks; an additional native Chrome run passed 17 installed-extension assertions against live LeetCode pages, recorded in [browser results](browser-testing/2026-10-30.json). Requirements below remain the product targets, not a claim that every acceptance criterion has shipped.
 
 The v0.2 implementation adds selective rendered-question context import, eleven authored LeetCode lessons with attempt checkpoints, and editable array/pointer/tree/shared-object dry runs with change highlights. See [release notes](RELEASE_0_2.md) for tests and the live-permission verification gate.
+
+The v0.3 implementation adds curated pattern comparisons, prediction-gated challenges and three additional bounded local reference contracts, manual smaller-failure histories, and structured recall with due/upcoming grouping and transparent history-based intervals. This is not validated memory modeling or automatic algorithm grading. See [v0.3 release evidence](RELEASE_0_3.md).
 
 ## 1. Product outcome
 
@@ -123,7 +125,7 @@ Keep per-question work durable across panel closure and browser restart. Separat
 
 Reuse workspace UI and data schemas across the web app and extension. Extension-origin storage and web-origin storage are separate: the MVP uses an extension-local notebook and explicit versioned JSON export/import to transfer records. Do not claim automatic synchronization. Later authenticated or local-device bridging needs a separately specified conflict-resolution and permission model.
 
-Release checks: canonicalization and duplicate handling; supported URL variants; invalid hosts/routes; missing title; permission denial; same-tab question navigation; simultaneous tabs; restart recovery; offline notes; and JSON transfer preserving attempts, edge cases, dry runs, and review history. Store packaging and installation instructions belong to the extension milestone. No extension has been built or submitted to a browser store yet.
+Release checks: canonicalization and duplicate handling; supported URL variants; invalid hosts/routes; missing title; permission denial; same-tab question navigation; simultaneous tabs; restart recovery; offline notes; and JSON transfer preserving attempts, edge cases, dry runs, and review history. Store packaging and installation instructions belong to the extension milestone. An unpacked extension is built; browser-store submission remains pending. Core live description extraction has been checked on two questions; the final background-handler changes still need a native recheck after an automation failure.
 
 ### Edge-case intuition workflow
 

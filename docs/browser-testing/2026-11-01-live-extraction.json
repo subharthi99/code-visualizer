@@ -1,0 +1,90 @@
+{
+  "date": "2026-11-01",
+  "release": "0.3.0",
+  "runner": "cua_repl driving native Google Chrome on macOS",
+  "extensionId": "jnhncpgdpeafgepopodonaifijhipanl",
+  "permissions": [
+    "activeTab",
+    "sidePanel",
+    "scripting"
+  ],
+  "authorization": "User explicitly approved reload with scripting and live LeetCode extraction testing.",
+  "assertions": [
+    {
+      "scenario": "Authorized reload of the installed unpacked v0.3.0 extension completed",
+      "result": "pass"
+    },
+    {
+      "scenario": "Two Sum description import previews statement, examples, and constraints",
+      "result": "pass"
+    },
+    {
+      "scenario": "Follow-up text, hints, discussions, editor content, and page chrome absent from preview",
+      "result": "pass"
+    },
+    {
+      "scenario": "Superscript-bound regression repaired test-first and live preview displays 10^(4) and 10^(9)",
+      "result": "pass"
+    },
+    {
+      "scenario": "Existing constraint notes are unchecked for replacement by default",
+      "result": "pass"
+    },
+    {
+      "scenario": "Applying description and examples preserves saved constraint notes and approach",
+      "result": "pass"
+    },
+    {
+      "scenario": "Same source tab navigated to another question; import rejected rather than attaching the new statement to the old workspace",
+      "result": "pass"
+    },
+    {
+      "scenario": "Valid Parentheses captured in a second window with its own source context",
+      "result": "pass"
+    },
+    {
+      "scenario": "Second question previews five examples and preserves exponent notation",
+      "result": "pass"
+    },
+    {
+      "scenario": "Second question context saves and reopens from another tab without duplication",
+      "result": "pass"
+    },
+    {
+      "scenario": "Solutions-page import fails safely with a manual-paste preview preserving saved fields",
+      "result": "pass"
+    },
+    {
+      "scenario": "LeetCode code editors remain unchanged in observed before/after states",
+      "result": "pass"
+    },
+    {
+      "scenario": "Extension manager showed no Errors button on the Code Visualizer card during the run",
+      "result": "pass"
+    }
+  ],
+  "defects": [
+    {
+      "issue": "innerText flattened superscript bounds into ordinary digits",
+      "testFirst": "Regression failed on 104 instead of 10^(4); description-subtree traversal passed the test without mutating the source.",
+      "nativeRecheck": "Passed on Two Sum and Valid Parentheses."
+    },
+    {
+      "issue": "Unavailable capture results and URL access reported a misleading complete-URL error",
+      "testFirst": "Reproduced missing Description guidance, expired-access guidance, and missing-result guidance; tests now pass.",
+      "nativeRecheck": "Not completed after the final changes because native automation became stuck on a stale menu."
+    },
+    {
+      "issue": "Source navigation after extraction could precede response delivery",
+      "testFirst": "A mocked second tab read returned a different question; test failed before a post-extraction tab-identity check was added.",
+      "nativeRecheck": "Final post-extraction guard is automated-test verified; native source-mismatch behavior before extraction passed."
+    }
+  ],
+  "limitations": [
+    "Final error-handling and post-extraction guard changes were built and automated-tested but could not receive a native recheck. The last reload attempt was not confirmed.",
+    "Native automation repeatedly returned noWindowsAvailable, elementHasNoFrame, stale element references, then a persistent My extensions menu and unavailable screenshots. Rebinding and resetting the automation session did not restore control.",
+    "No whole-browser restart, forced permission revocation, cross-version compatibility, or all-problem DOM coverage claimed.",
+    "Text capture does not reproduce diagrams or arbitrary mathematical rendering. Preview remains editable.",
+    "QA notes were added only to empty fields; existing notebook records and notes were preserved. No copied LeetCode descriptions were added to repository fixtures."
+  ]
+}

@@ -208,6 +208,10 @@ export function validateBackup(data) {
     if ((raw.url || raw.exerciseId) && base.id !== raw.id) throw new Error('Backup question identity does not match its source.');
     base.id = raw.id;
     for (const key of ['restatement','constraints','example','approach','algorithm','cue','invariant','mistake','complexity']) base[key] = text(raw[key]);
+    if (raw.patternNote !== undefined) {
+      if (typeof raw.patternNote !== 'string') throw new Error('Invalid pattern note.');
+      base.patternNote = text(raw.patternNote);
+    }
     for (const key of ['createdAt','updatedAt']) {
       if (typeof raw[key] !== 'string' || !Number.isFinite(Date.parse(raw[key]))) throw new Error('Backup contains an invalid timestamp.');
       base[key] = raw[key];
@@ -221,6 +225,9 @@ export function validateBackup(data) {
     }
     // Validate all rendered nested data, so malformed imports cannot break the workspace.
     for (const c of base.cases) if (!c || !['id','input','expected','why','category'].every(k => typeof c[k] === 'string') || !Number.isSafeInteger(c.revision)) throw new Error('Invalid edge case in backup.');
+    for (const c of base.cases) if (c.reductions !== undefined) {
+      if (!Array.isArray(c.reductions) || c.reductions.length > 10000 || c.reductions.some(d => !d || !['input','actual','expected','lesson'].every(k => typeof d[k] === 'string' && d[k].trim() && d[k].length <= 10000) || !Number.isFinite(Date.parse(d.at)) || !Number.isSafeInteger(d.revision))) throw new Error('Invalid counterexample history.');
+    }
     for (const snap of base.snapshots) {
       if (!snap || !['id','action','explanation','input','step','diagram'].every(k => typeof snap[k] === 'string') || !Number.isSafeInteger(snap.revision) || !snap.variables || typeof snap.variables !== 'object' || Array.isArray(snap.variables)) throw new Error('Invalid dry-run snapshot in backup.');
       validateFrames(snap.frames);
@@ -228,6 +235,7 @@ export function validateBackup(data) {
       for (const f of snap.frames) if (typeof f.label !== 'string' || typeof f.returned !== 'string' || !f.locals || typeof f.locals !== 'object') throw new Error('Invalid call frame.');
     }
     for (const r of base.reviews) if (!r || !['again','hard','good','easy'].includes(r.rating) || !Number.isFinite(Date.parse(r.at))) throw new Error('Invalid review history.');
+    for (const r of base.reviews) if (r.policy === 'recall-v2' && (typeof r.assisted !== 'boolean' || !Number.isInteger(r.intervalDays) || r.intervalDays < 1 || r.intervalDays > 90 || !['attempt','transition','edgeCase'].every(k => typeof r[k] === 'string' && r[k].length <= 10000))) throw new Error('Invalid recall evidence or interval.');
     for (const r of base.revisions) if (!r || typeof r.algorithm !== 'string' || !Number.isSafeInteger(r.revision)) throw new Error('Invalid algorithm revision.');
     if (raw.due !== null && !Number.isFinite(Date.parse(raw.due))) throw new Error('Invalid review date.');
     base.due = raw.due;
