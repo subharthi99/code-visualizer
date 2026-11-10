@@ -1,4 +1,5 @@
 import { validateVisual } from './visual.js';
+import { validateTrace } from './trace.js';
 import { exercises } from './content.js';
 
 export const SCHEMA_VERSION = 1;
@@ -211,6 +212,14 @@ export function validateBackup(data) {
     if (raw.patternNote !== undefined) {
       if (typeof raw.patternNote !== 'string') throw new Error('Invalid pattern note.');
       base.patternNote = text(raw.patternNote);
+    }
+    if (raw.pythonSource !== undefined) {
+      if (typeof raw.pythonSource !== 'string' || raw.pythonSource.length > 20000) throw new Error('Invalid Python source.');
+      base.pythonSource = raw.pythonSource;
+    }
+    if (raw.pythonTrace !== undefined) {
+      if (!Number.isSafeInteger(raw.pythonTrace?.algorithmRevision) || raw.pythonTrace.algorithmRevision < 1) throw new Error('Invalid Python trace algorithm revision.');
+      base.pythonTrace = { ...validateTrace(raw.pythonTrace),algorithmRevision:raw.pythonTrace.algorithmRevision };
     }
     for (const key of ['createdAt','updatedAt']) {
       if (typeof raw[key] !== 'string' || !Number.isFinite(Date.parse(raw[key]))) throw new Error('Backup contains an invalid timestamp.');

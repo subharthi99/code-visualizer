@@ -11,6 +11,9 @@ import * as visualModule from '../src/visual.js';
 import * as patternModule from '../src/patterns.js';
 import * as challengeModule from '../src/challenges.js';
 import * as recallModule from '../src/recall.js';
+import * as traceModule from '../src/trace.js';
+import * as traceUI from '../src/trace-ui.js';
+import { spawnSync } from 'node:child_process';
 
 // Exercise the actual application handlers with DOM/storage boundaries replaced.
 // This verifies state and rendering decisions, not layout or real browser events.
@@ -23,7 +26,7 @@ async function workspace(initial, options = {}) {
   const modal = { innerHTML:'', addEventListener() {},showModal() {},close() {} };
   const focus = { focus() {} };
   const context = vm.createContext({
-    ...domain, ...content, ...contextModule, ...lessonModule, ...visualModule, ...visualUI, ...patternModule, ...challengeModule, ...recallModule, console, URLSearchParams, URL, structuredClone, chrome:options.chrome,
+    ...domain, ...content, ...contextModule, ...lessonModule, ...visualModule, ...visualUI, ...patternModule, ...challengeModule, ...recallModule, ...traceModule, ...traceUI, console, URLSearchParams, URL, structuredClone, chrome:options.chrome,
     Date:options.now ? class extends Date {
       constructor(...args) { super(...(args.length ? args : [options.now])); }
       static now() { return new Date(options.now).getTime(); }
@@ -53,7 +56,7 @@ async function workspace(initial, options = {}) {
   const click = (action,extra = {}) => documentEvents.click({ preventDefault() {},target:{ closest:() => ({ dataset:{ action,...extra } }) } });
   const input = (field,value) => rootEvents.input({ target:{ dataset:{ field },value } });
   const submit = (id,values) => documentEvents.submit({ preventDefault() {},target:{ id,values,dataset:{},reset() {} } });
-  const change = (id,checked) => rootEvents.change?.({ target:{ id,checked } });
+  const change = (id,checked,extra = {}) => rootEvents.change?.({ target:{ id,checked,...extra } });
   return { root,stored,click,input,change,submit,controls,notice,modal, flush:context.boundary.persist };
 }
 
@@ -72,6 +75,60 @@ test('workspace reveals one authored hint while preserving notes across a proble
   await app.click('select',{ id:guided.id });
   assert.equal(app.stored.get(guided.id).restatement,'Count nodes on the longest path.');
   assert.ok(app.root.innerHTML.includes('Count nodes on the longest path.'));
+});
+
+test('Python study imports execution separately, preserves edited source, and replays without changing manual snapshots', async () => {
+  const record = domain.makeRecord({ exerciseId:'tree-depth' });
+  const data = JSON.parse(spawnSync('python3',['-I','scripts/trace_python.py'],{ input:JSON.stringify({ source:'x = [1]\nx.append(2)\n' }),encoding:'utf8' }).stdout);
+  const app = await workspace([record]);
+  await app.click('tab',{ tab:'Code' });
+  assert.match(app.root.innerHTML,/Python study/);
+  app.input('pythonSource','print("newer edit")');
+  await app.change('python-trace-file',false,{ files:[{ size:2000,text:async () => JSON.stringify(data) }] });
+  const saved = app.stored.get(record.id);
+  assert.equal(saved.pythonSource,'print("newer edit")');
+  assert.equal(saved.pythonTrace.algorithmRevision,1);
+  assert.equal(saved.pythonTrace.events.length,data.events.length);
+  assert.deepEqual(saved.snapshots,[]);
+  assert.match(app.root.innerHTML,/editor differs/);
+  const sourceStatus = { hidden:false };
+  app.controls.set('#python-trace-source-status',sourceStatus);
+  app.input('pythonSource',data.source);
+  assert.equal(sourceStatus.hidden,true);
+  app.input('pythonSource','print("changed again")');
+  assert.equal(sourceStatus.hidden,false);
+  await app.click('trace-move',{ move:'last' });
+  assert.match(app.root.innerHTML,/Return value/);
+  await app.click('trace-move',{ move:'first' });
+  assert.match(app.root.innerHTML,/Event 1: Enter call/);
+  await app.change('python-trace-file',false,{ files:[{ size:100,text:async () => '{"version":999}' }] });
+  assert.match(app.notice.textContent,/Invalid Python trace/);
+  assert.equal(app.stored.get(record.id).pythonTrace.source,data.source);
+  await app.change('python-trace-event',false,{ value:'-5' });
+  assert.match(app.root.innerHTML,/Event 1: Enter call/);
+});
+
+test('trace file read cannot attach its result to another question after navigation', async () => {
+  const a = domain.makeRecord({ title:'A' }), b = domain.makeRecord({ title:'B' });
+  const app = await workspace([a,b]);
+  let complete;
+  const pending = app.change('python-trace-file',false,{ files:[{ size:10,text:() => new Promise(resolve => { complete = resolve; }) }] });
+  await app.click('select',{ id:b.id });
+  complete('{}'); await pending;
+  assert.equal(app.stored.get(b.id).pythonTrace,undefined);
+  assert.match(app.notice.textContent,/question changed/i);
+});
+
+test('pasted trace JSON uses the same validation and source-preservation rules as file import', async () => {
+  const record = domain.makeRecord();
+  const data = JSON.parse(spawnSync('python3',['-I','scripts/trace_python.py'],{ input:JSON.stringify({ source:'x = 1\n' }),encoding:'utf8' }).stdout);
+  const app = await workspace([record]);
+  await app.submit('python-trace-form',{ traceJSON:JSON.stringify(data) });
+  assert.equal(app.stored.get(record.id).pythonSource,data.source);
+  assert.equal(app.stored.get(record.id).pythonTrace.status,'complete');
+  await app.submit('python-trace-form',{ traceJSON:'{}' });
+  assert.match(app.notice.textContent,/Invalid Python trace/);
+  assert.equal(app.stored.get(record.id).pythonTrace.source,data.source);
 });
 
 test('challenge outcomes require a prediction and smaller failures preserve the original case', async () => {

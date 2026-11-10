@@ -8,10 +8,13 @@ import { caseSupport, challengeCases, referenceFor, saveCounterexample } from '.
 import { recallPrompts, recallInterval, recordRecall, reviewOverview } from './recall.js';
 import { normalizeContext, applyContext } from './context.js';
 import { openDatabase, readRecords, writeRecords } from './persistence.js';
+import { validateTrace, tracePosition } from './trace.js';
+import { renderCodeStudy } from './trace-ui.js';
 
 const root = document.querySelector('#app');
 const modal = document.querySelector('#modal');
-const tabs = ['Understand', 'Algorithm', 'Edge cases', 'Dry run', 'Patterns', 'Recall'];
+const tabs = ['Understand', 'Algorithm', 'Edge cases', 'Dry run', 'Code', 'Patterns', 'Recall'];
+let traceCursor = 0, traceImportSequence = 0;
 let records = [], activeId = '', tab = 'Understand', view = 'workspace', filter = '';
 let frameDraft = [], cursor = -1, caseIndex = 0, caseLevel = 0, recallRevealed = false;
 let dirty = false, saveTimer, noticeTimer, saving = Promise.resolve(), importPreview;
@@ -71,7 +74,7 @@ function field(label, key, placeholder = '', rows = 3) {
   return `<label class="field"><span>${label}</span><textarea data-field="${key}" rows="${rows}" placeholder="${e(placeholder)}">${e(current()[key])}</textarea></label>`;
 }
 
-function resetSession() { recallEvidence = null; challengePrediction = ''; visualDraft = emptyVisual(); hintFocus = 'approach'; frameDraft = []; cursor = -1; caseIndex = 0; caseLevel = 0; recallRevealed = false; }
+function resetSession() { traceCursor = 0; traceImportSequence++; recallEvidence = null; challengePrediction = ''; visualDraft = emptyVisual(); hintFocus = 'approach'; frameDraft = []; cursor = -1; caseIndex = 0; caseLevel = 0; recallRevealed = false; }
 
 async function selectRecord(id) {
   await persist();
@@ -155,7 +158,7 @@ function workspace() {
   const r = current(), x = exercise();
   return `<div class="workspace-heading"><div class="eyebrow">${x ? e(x.category) : 'YOUR THINKING WORKSPACE'}</div><div class="title-row"><h1>${e(r.title)}</h1>${badge(r.status)}</div><p>${x ? e(x.prompt) : 'Start with what you know. Turn it into an approach you can explain.'}</p><div class="source-row">${r.url ? `<a href="${e(r.url)}" target="_blank" rel="noopener noreferrer">Open on LeetCode ↗</a>` : '<span>Original practice exercise</span>'}<span>Algorithm revision ${r.revision}</span></div></div>
     <div class="tabbar" role="tablist" aria-label="Learning steps">${tabs.map((t,i) => `<button id="tab-${i}" role="tab" aria-selected="${tab === t}" tabindex="${tab === t ? 0 : -1}" aria-controls="workspace-panel" data-action="tab" data-tab="${t}"><span>0${i+1}</span>${t}</button>`).join('')}</div>
-    <section id="workspace-panel" role="tabpanel" aria-labelledby="tab-${tabs.indexOf(tab)}" tabindex="0">${({ Understand: understand, Algorithm: algorithm, 'Edge cases': edgeCases, 'Dry run': dryRun, Patterns: patterns, Recall: recall })[tab]()}</section>`;
+    <section id="workspace-panel" role="tabpanel" aria-labelledby="tab-${tabs.indexOf(tab)}" tabindex="0">${({ Understand: understand, Algorithm: algorithm, 'Edge cases': edgeCases, 'Dry run': dryRun, Code:() => renderCodeStudy(r,traceCursor), Patterns: patterns, Recall: recall })[tab]()}</section>`;
 }
 
 function patterns() {
@@ -314,6 +317,10 @@ root.addEventListener('input', event => {
   if (el.dataset.field && current()) {
     if (el.dataset.field === 'algorithm') algorithmDrafts.set(current().id, el.value);
     else current()[el.dataset.field] = el.value;
+    if (el.dataset.field === 'pythonSource' && current().pythonTrace) {
+      const status = document.querySelector('#python-trace-source-status');
+      if (status) status.hidden = current().pythonTrace.source === el.value;
+    }
     markDirty();
   }
 });
@@ -325,7 +332,34 @@ root.addEventListener('focusout', event => {
   }
 });
 
-root.addEventListener('change', event => {
+async function attachPythonTrace(source, recordId, sequence) {
+  if (source.length > MAX_IMPORT_BYTES) throw new Error('Choose a trace smaller than 5 MB.');
+  if (current()?.id !== recordId || sequence !== traceImportSequence) throw new Error('The question changed or a newer import started. Import the trace again.');
+  const trace = validateTrace(JSON.parse(source));
+  await persist();
+  if (current()?.id !== recordId || sequence !== traceImportSequence) throw new Error('The question changed or a newer import started. Import the trace again.');
+  current().pythonTrace = { ...trace,algorithmRevision:current().revision };
+  if (!current().pythonSource) current().pythonSource = trace.source;
+  traceCursor = 0; markDirty(); await persist(); render(); notify('Python trace imported. Manual dry runs are preserved.');
+}
+
+root.addEventListener('change', async event => {
+  if (event.target.id === 'python-trace-file') {
+    const file = event.target.files?.[0], record = current(), sequence = ++traceImportSequence;
+    if (!file || !record) return;
+    try {
+      if (file.size > MAX_IMPORT_BYTES) throw new Error('Choose a trace smaller than 5 MB.');
+      const source = await file.text();
+      await attachPythonTrace(source,record.id,sequence);
+    } catch (error) { notify(error.message,true); }
+    return;
+  }
+  if (event.target.id === 'python-trace-event' && current()?.pythonTrace) {
+    const index = Number(event.target.value);
+    if (Number.isInteger(index) && index >= 0 && index < current().pythonTrace.events.length) traceCursor = index;
+    render(); document.querySelector('#python-trace-event')?.focus();
+    return;
+  }
   if (event.target.id === 'recall-help' && recallRevealed && recallEvidence) {
     recallEvidence.usedHelp ||= Boolean(event.target.checked);
     render(); document.querySelector('#recall-help').focus();
@@ -341,6 +375,17 @@ document.addEventListener('click', async event => {
     if (action === 'home' || action === 'workspace') { await persist(); view = 'workspace'; if (action === 'home') activeId = ''; render(); }
     if (action === 'add') addDialog();
     if (action === 'import-context') await importQuestionContext();
+    if (action === 'trace-move' && current()?.pythonTrace) {
+      traceCursor = tracePosition(current().pythonTrace,traceCursor,el.dataset.move); render();
+      document.querySelector(`[data-action="trace-move"][data-move="${el.dataset.move}"]`)?.focus();
+    }
+    if (action === 'download-python') {
+      await persist();
+      if (!current().pythonSource?.trim()) throw new Error('Write a Python program before downloading.');
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob([current().pythonSource],{ type:'text/x-python' }));
+      link.download = 'program.py'; link.click(); setTimeout(() => URL.revokeObjectURL(link.href),1000);
+    }
     if (action === 'close-modal') modal.close();
     if (action === 'exercise') await openRecord(makeRecord({ exerciseId: el.dataset.id }));
     if (action === 'select') await selectRecord(el.dataset.id);
@@ -428,6 +473,9 @@ document.addEventListener('submit', async event => {
   event.preventDefault(); const form = event.target;
   try {
     const data = Object.fromEntries(new FormData(form));
+    if (form.id === 'python-trace-form') {
+      await attachPythonTrace(data.traceJSON,current().id,++traceImportSequence);
+    }
     if (form.id === 'context-form') {
       const old = current(), fields = ['title','description','examples','constraints'].filter(key => Object.hasOwn(data,`use-${key}`));
       if (!fields.length) throw new Error('Select at least one field to apply.');

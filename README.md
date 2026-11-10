@@ -4,9 +4,11 @@ A local-first workspace for reasoning through data structures and algorithms **b
 
 **Status: working early alpha (v0.3.0).** Includes a browser app and a buildable Chrome companion extension. No accounts, external AI calls, runtime dependencies, or paid services are required.
 
+The working tree also includes the next Python tracing preview: an optional local CPython runner and a **Code** tab for importing and replaying execution. See [tracing setup and scope](docs/PYTHON_TRACING.md).
+
 ## Run locally
 
-Requires Node.js 22 or newer. There are no packages to install.
+Requires Node.js 22 or newer. There are no packages to install. Running Python traces and the tracing tests additionally requires Python 3.9+ on macOS or Linux; ordinary browser use does not require Python.
 
 ```sh
 npm run dev
@@ -31,6 +33,7 @@ If a local server is unavailable, build and open `dist/web/standalone.html` in C
 - Write algorithms/pseudocode with saved revisions.
 - Discover edge-case categories and predict before revealing an outcome. Reference checks cover three guided exercises plus bounded local contracts for Valid Parentheses, Binary Search, and Longest Substring Without Repeating Characters. Save smaller learner-observed failures with the assumption they expose.
 - Build editable arrays with named pointers, binary trees with selectable nodes, and objects with shared references. Record diagrams alongside variables, recursive frames, and return values. Replay snapshots and inspect what changed.
+- Write Python in the Code tab, download the program, run the local tracer, and import its JSON by file or paste. Replay observed lines, calls, returns, exceptions, and shared collection state with step into/over/out. Source edits visibly retain the earlier trace as a separate version.
 - Compare curated patterns and related questions across eleven lessons; record why a shared idea does or does not transfer.
 - Reconstruct your approach, trace a transition, and invent a fresh case before revealing saved reasoning. Review due, upcoming, and unscheduled questions; intervals respond to self-rated recall and declared help use.
 - Import a Notion-style CSV with column mapping and row-error preview, or transfer a versioned JSON backup. Existing problems are preserved.
@@ -52,7 +55,7 @@ Data is saved in this browser's IndexedDB. Export backups; clearing site data or
 
 Dry runs are **learner-authored reasoning, not executed code**. Reference checks validate supported inputs and reveal expected outcomes; they do not execute or prove your algorithm correct. A LeetCode link alone does not supply its constraints: import or enter the specification. Authored lessons match exact supported question URLs; rule-based checkpoints are prompts, not algorithm correctness checks. Unsupported problems require self-checking.
 
-Review intervals use transparent history-based prototype rules, not a validated memory model. Missing reconstruction evidence or declared help triggers a one-day retry; good/easy ratings on complete independent attempts grow intervals. Past history stays intact. Python tracing, arbitrary pseudocode execution, Notion API sync, and additional languages remain future work.
+Review intervals use transparent history-based prototype rules, not a validated memory model. Missing reconstruction evidence or declared help triggers a one-day retry; good/easy ratings on complete independent attempts grow intervals. Past history stays intact. In-browser Python execution, learner-confirmed algorithm-to-code mappings, arbitrary pseudocode execution, Notion API sync, and additional languages remain future work. The tracing preview runs trusted small programs through an explicit local command; it is not an execution sandbox or a remote execution service.
 
 ## Project documents
 

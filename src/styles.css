@@ -252,3 +252,12 @@ dialog p { font-size: 12px; }
   .app-footer { margin-inline: 18px; font-size: 9px; } .welcome-import { align-items: start; flex-direction: column; } .section-heading { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion:reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }
+.trace-columns { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 1.5rem; }
+.trace-columns > div { min-width: 0; }
+.trace-source { overflow: auto; padding: 1rem 1rem 1rem 3.5rem; border: 1px solid var(--line); border-radius: 10px; }
+.trace-source li { white-space: pre; padding: .15rem .5rem; font-family: monospace; }
+.trace-source .trace-current { background: #f9ebbb; color: #332d1b; outline: 1px solid #9e791f; }
+.trace-columns dl { margin: .5rem 0; }
+.trace-columns dt { font-weight: 600; }
+.trace-columns dd { margin: 0 0 .5rem 1rem; overflow-wrap: anywhere; }
+@media (max-width: 800px) { .trace-columns { grid-template-columns: 1fr; } }

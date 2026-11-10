@@ -12,6 +12,8 @@ The v0.2 implementation adds selective rendered-question context import, eleven 
 
 The v0.3 implementation adds curated pattern comparisons, prediction-gated challenges and three additional bounded local reference contracts, manual smaller-failure histories, and structured recall with due/upcoming grouping and transparent history-based intervals. This is not validated memory modeling or automatic algorithm grading. See [v0.3 release evidence](RELEASE_0_3.md).
 
+The next development slice implements an optional local CPython trace runner, a Python source editor, imported trace playback with stack/object snapshots, source-version warnings, and backup transfer. It establishes the isolated-engine prototype without adding a browser runtime or execution endpoint. See [Python tracing](PYTHON_TRACING.md) for limits, evidence, and unfinished acceptance criteria.
+
 ## 1. Product outcome
 
 Help a learner move from a problem statement to an independently reasoned algorithm, dry-run it before writing code, implement it, and reconstruct the reasoning later.

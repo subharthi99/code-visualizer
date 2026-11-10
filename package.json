@@ -12,7 +12,8 @@
     "build": "node scripts/build.mjs",
     "pretest": "node scripts/build.mjs",
     "test": "node --test",
-    "check": "node scripts/check.mjs"
+    "check": "node scripts/check.mjs",
+    "trace": "node scripts/trace.mjs"
   },
   "license": "MIT"
 }

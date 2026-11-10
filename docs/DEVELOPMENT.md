@@ -11,12 +11,14 @@ The app uses native JavaScript modules and CSS, with no runtime or development d
 - `src/recall.js`: reconstruction prompts, review grouping, self-rated summaries, and history-based intervals.
 - `src/lessons.js`: eleven URL-matched authored lessons and attempt/focus checkpoints.
 - `src/visual.js`, `src/visual-ui.js`: immutable diagram editing, graph validation, snapshot diffs, and accessible visual rendering.
+- `src/trace.js`, `src/trace-ui.js`: bounded trace validation, playback navigation, and Python editor/recorded-state rendering.
 - `src/domain.js`: problem identity, algorithm revisions, dry-run state transitions, case validators, review policy, and import validation.
 - `src/persistence.js`: IndexedDB transactions with optimistic conflict detection for edits.
 - `src/app.js`: accessible workspace UI and event handling. Imported content is rendered as text.
 - `src/styles.css`, `src/theme.css`: responsive layouts, focus states, reduced motion, and design tokens.
 - `extension/`: Manifest V3 toolbar capture and per-tab side-panel setup.
 - `scripts/`: static preview, deterministic packaging, and syntax checks.
+- `scripts/trace.mjs`, `scripts/trace_python.py`: explicit local CPython tracing with a host deadline; no browser execution endpoint. See [language contract and setup](PYTHON_TRACING.md).
 - `tests/`: Node's built-in test runner; no installation required.
 
 Use two spaces and native ES modules. `.editorconfig` defines basic formatting. No formatter or linter dependency is installed; `npm run check` checks syntax, not style. Do not edit generated `dist/` files.
@@ -29,6 +31,8 @@ npm run check
 npm test
 npm run build
 ```
+
+The full test suite now also needs Python 3.9+ on macOS or Linux. `npm run --silent trace -- assets/examples/factorial.py > trace.json` demonstrates the optional tracing path. You can also use `node scripts/trace.mjs ...` for JSON-only redirected output. Browser startup and packaging remain Node-only. Python files use four spaces; JavaScript retains the existing two-space convention.
 
 The development server binds loopback only and serves the application entry point and public assets; it does not expose repository metadata or arbitrary workspace files. Build produces an HTTP-hostable app, a standalone preview, and an unpacked extension. The standalone artifact inlines a fixed, known list of modules without `eval` or a generic JavaScript bundler. Run syntax checks and the browser smoke test when changing module boundaries.
 
@@ -75,7 +79,7 @@ For future releases, repeat the checks below. The current run covers core flows,
 
 ## Still planned
 
-Live code execution, automatic checking of learner pseudocode, a validated memory model, arbitrary-problem AI tutoring, more diagram types, Notion API integration, and automatic cross-device synchronization. The current app supports a useful pre-code loop but does not fulfill every future requirement in the PRD.
+In-browser code execution, learner-confirmed algorithm-to-trace mapping, automatic checking of learner pseudocode, a validated memory model, arbitrary-problem AI tutoring, more diagram types, Notion API integration, and automatic cross-device synchronization. The local tracing preview is the first implementation slice of the execution milestone, not completion of every F1–F5/F11 criterion.
 
 ## v0.2 verification
 
